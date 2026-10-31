@@ -32,7 +32,9 @@ jobs:
         if: always()
         with:
           name: test-results-${{ runner.os }}
-          path: test-results.xml
+          path: |
+            test-results.xml
+            test-artifacts/
   windows-package:
     runs-on: windows-latest
     needs: test

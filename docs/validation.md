@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **48 passed**, including the optional private-log integration test.
+- `pytest -q`: **49 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -48,18 +48,20 @@ performance.md and docs/benchmarks/. These synthetic sessions bypass TXT parsing
 The screenshot was regenerated from synthetic data and shows the folder-first toolbar and logo.
 
 
-The configurable-plot update passes 48 local tests. A real Qt wheel event verifies X zoom with
+The configurable-plot update passes 49 local tests. A real Qt wheel event verifies X zoom with
 all three unit-specific Y ranges unchanged; dragging an auxiliary layer also pans shared X only.
 Tests exercise the real configuration dialog and every header/menu target, range editing/refit,
 duplicate channels across panels, restoration of saved layouts, nine channels/four units in the
 fourth plot, CSV column deduplication, full-height branding and pixel checks for visible Y labels.
+Both desktop and 1028×749 windows are checked: docks yield space to extra axes, titles remain
+visible and the logo stays inside the toolbar. Clock tick spacing accounts for full label width.
 Formatting tests include midnight-sized elapsed durations, sessions over 24 hours and millisecond
 cursor values. Synthetic screenshots were regenerated from the application.
 
 The mixed-axis rendering check on 186,400 constructed samples keeps six displayed series and
-source arrays intact. In 90 interaction frames, p95 cursor updates were 0.773 ms, viewport paint
-23.289 ms (including pan/zoom frames), steady cursor-only paint 5.567 ms and map round trips
-3.110 ms. See docs/benchmarks/mixed-axis-rendering.json. This is a rendering check, not TXT import
+source arrays intact. In 90 interaction frames, p95 cursor updates were 0.747 ms, viewport paint
+17.373 ms (including pan/zoom frames), steady cursor-only paint 5.293 ms and map round trips
+3.222 ms. See docs/benchmarks/mixed-axis-rendering.json. This is a rendering check, not TXT import
 throughput or a hardware-independent frame-rate guarantee.
 
 GUI smoke tests, rendering checks and screenshot tools use temporary INI settings on all

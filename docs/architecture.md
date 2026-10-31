@@ -71,6 +71,8 @@ multiple panels while sharing its source arrays and cached validity mask. Channe
 same unit share a ViewBox; each additional unit gets an independent linked ViewBox and a colored
 right-hand AxisItem. All share X geometry/ranges and cursor positions. Additional right-axis
 columns are reserved equally across visible panels. Unknown units use channel-specific groups.
+The plot's minimum width includes its axis columns and a usable data area; docks yield space
+on smaller screens. The analysis toolbar overflows before the 60-pixel branding toolbar does.
 
 XOnlyViewBox directs wheel/drag gestures, including gestures over auxiliary layers, to X only.
 All Y auto-range flags are disabled; PlotItem's native auto-range buttons/menus are replaced by
@@ -80,8 +82,8 @@ or the explicit Fit Y action is the only way to revise an existing range.
 
 AxisItem's Qt item cache can clip sibling Y labels with auxiliary ViewBoxes. Vertical axes are
 painted directly from their cached vector pictures; a separate cached GridItem draws horizontal
-lines. Time-axis pictures are rasterized after measuring tick geometry on the live viewport,
-with enough margin for hh:mm:ss labels. This preserves readability and avoids replaying the
+lines. Time-axis pictures are rasterized after the first viewport paint, with clock tick spacing
+based on the full hh:mm:ss text width and enough margin for edge labels. This avoids replaying the
 entire grid on cursor movement. The synthetic mixed-axis benchmark is recorded in benchmarks/.
 
 PlotConfigurationDialog edits titles, channel selection and per-unit bounds atomically. The

@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QToolBar,
     QToolButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from telemetry_viewer.exporters.files import export_csv, export_gpx
@@ -75,7 +76,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Telemetry Viewer")
         self.resize(1560, 920)
         self.setMinimumSize(1000, 600)
-        self.settings = QSettings("LapTune", "TelemetryViewer")
+        self.settings = QSettings(
+            QSettings.defaultFormat(), QSettings.Scope.UserScope, "LapTune", "TelemetryViewer"
+        )
         self.session = None
         self.source_path = None
         self.cursor_sample = 0
@@ -217,11 +220,11 @@ class MainWindow(QMainWindow):
         self.brand_toolbar.setObjectName("branding")
         self.brand_toolbar.setMovable(False)
         self.brand_toolbar.setFloatable(False)
-        self.brand_toolbar.setMinimumWidth(310)
+        self.brand_toolbar.setMinimumWidth(314)
         self.brand_toolbar.setFixedHeight(60)
         self.brand_toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.brand_toolbar.setStyleSheet(
-            "QToolBar {padding:0; margin:0; border:0; background:#172330;}"
+            "QToolBar {padding:0; margin:0; border:0; spacing:0; background:#172330;}"
         )
         self.brand_logo = QLabel()
         self.brand_logo.setObjectName("laptune_brand")
@@ -240,11 +243,18 @@ class MainWindow(QMainWindow):
         self.brand_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.brand_logo.setFixedSize(310, 60)
         self.brand_logo.setStyleSheet("background:#000; padding:0; margin:0; border:0;")
-        brand_spacer = QLabel()
+        brand_spacer = QWidget()
         brand_spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.brand_toolbar.addWidget(brand_spacer)
         self.brand_toolbar.addWidget(self.brand_logo)
         self.addToolBar(self.brand_toolbar)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "brand_toolbar"):
+            # Let analysis actions overflow before the fixed-height logo is squeezed out.
+            available = event.size().width() - self.brand_toolbar.minimumWidth()
+            self.analysis_toolbar.setMaximumWidth(max(240, available))
 
     def _refresh_recent(self):
         self.recent_menu.clear()

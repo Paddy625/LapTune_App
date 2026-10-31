@@ -1,7 +1,9 @@
+import math
+
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QFontMetricsF, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsItem,
     QGraphicsProxyWidget,
@@ -41,8 +43,8 @@ class CachedAxis(pg.AxisItem):
             return
         drawn = False
         if self.picture is None:
-            # Generate tick geometry with the live viewport painter. Measuring fonts
-            # while painting directly into an offscreen cache clips sibling Y labels.
+            # Let AxisItem initialize and paint on the live viewport before caching.
+            # Painting into an offscreen cache first can clip sibling Y labels.
             painter.save()
             try:
                 super().paint(painter, option, widget)
@@ -82,6 +84,43 @@ class TimeAxis(CachedAxis):
     def boundingRect(self):
         # hh:mm:ss labels need room on both edges, including the zero-time tick.
         return super().boundingRect().adjusted(-30, 0, 30, 0)
+
+    def tickSpacing(self, minVal, maxVal, size):
+        if not self.clock_format:
+            return super().tickSpacing(minVal, maxVal, size)
+        duration = abs(maxVal - minVal)
+        if duration == 0:
+            return []
+        label = elapsed_clock(max(abs(minVal), abs(maxVal)))
+        label_width = QFontMetricsF(self.font()).horizontalAdvance(label) + 16
+        minimum = max(1e-12, duration * label_width / max(size, 1))
+        base = 10 ** math.floor(math.log10(minimum))
+        spacing = next(
+            multiplier * base for multiplier in (1, 2, 5, 10) if multiplier * base >= minimum
+        )
+        if minimum >= 1:
+            friendly = (
+                1,
+                2,
+                5,
+                10,
+                15,
+                30,
+                60,
+                120,
+                300,
+                600,
+                900,
+                1800,
+                3600,
+                7200,
+                21600,
+                43200,
+                86400,
+            )
+            spacing = next((value for value in friendly if value >= minimum), spacing)
+        # Only one label level: minor numeric ticks would overlap long clock labels.
+        return [(spacing, 0)]
 
     def tickStrings(self, values, scale, spacing):
         if not self.clock_format:
@@ -160,8 +199,7 @@ class PlotPanel(QWidget):
             label = QLabel(self.titles[i])
             label.setMinimumWidth(0)
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-            header_layout.addWidget(label)
-            header_layout.addStretch()
+            header_layout.addWidget(label, 1)
             button = QToolButton()
             button.setObjectName(f"configure_plot_{i + 1}")
             button.setAccessibleName(f"Configure plot {i + 1}")
@@ -255,6 +293,9 @@ class PlotPanel(QWidget):
     def _align_axes(self):
         columns = max((len(axes) - 1 for axes in self.unit_views[: self._count]), default=0)
         columns = max(0, columns)
+        # Dock panels must yield space to the plot, including on small laptop screens.
+        # Otherwise extra Y axes can end up outside the graphics viewport entirely.
+        self.setMinimumWidth(max(340, 78 * (columns + 1) + 240))
         for plot in self.plots:
             for column in range(2, max(columns, self._right_columns) + 2):
                 plot.layout.setColumnFixedWidth(column, 78 if column < columns + 2 else 0)

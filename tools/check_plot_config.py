@@ -1,8 +1,8 @@
 """Real Qt interaction check for independent Y axes, wheel zoom and plot configuration."""
 
-import base64
 import csv
 import json
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pyqtgraph as pg
 from benchmark_rendering import synthetic_session
-from PySide6.QtCore import QBuffer, QIODevice, QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QPoint, QPointF, Qt, QTimer
 from PySide6.QtGui import QWheelEvent
 
 from telemetry_viewer.app import create_application, isolated_settings
@@ -20,8 +20,13 @@ from telemetry_viewer.gui.plot_config import PlotConfigurationDialog, channel_un
 preferences = isolated_settings()
 app = create_application([])
 window = MainWindow()
+assert Path(window.settings.fileName()).is_relative_to(preferences.name), (
+    "Settings were not isolated"
+)
 window.layer_combo.setCurrentText("Offline")
 window.resize(1560, 920)
+if "--compact" in sys.argv:
+    window.resize(1028, 749)
 window.show()
 session = synthetic_session(2000)
 session.channels["ACC_Y"].samples *= 5
@@ -110,12 +115,27 @@ def check():
                 "01:01:01",
                 "25:01:01",
             ]
+            assert window.plots.axes[0].tickSpacing(0, 20, 200)[0][0] >= 10
             assert window.brand_logo.pixmap().height() == window.brand_toolbar.height()
             assert window.brand_logo.height() == window.brand_toolbar.height()
             state["phase"] = "wheel"
         elif phase == "wheel":
             # The drawn unit labels must contain real colored text, not clipped bitmaps.
             image = window.grab().toImage()
+            assert window.plots.title_labels[0].width() > 50
+            assert window.brand_logo.isVisibleTo(window), "Logo overflowed the toolbar"
+            assert window.rect().contains(
+                window.brand_logo.mapTo(window, window.brand_logo.rect().bottomRight())
+            ), "Logo was outside the window"
+            assert (
+                abs(
+                    window.width()
+                    - 1
+                    - window.brand_logo.mapTo(window, window.brand_logo.rect().bottomRight()).x()
+                )
+                <= 2
+            ), "Logo was not aligned to the right edge"
+            assert window.plots.plots[0].vb.width() >= 190, "Dock panels squeezed the plot"
             ratio = window.devicePixelRatioF()
             viewport = window.plots.graphics.viewport()
             for panel, axes in enumerate(window.plots.unit_axes[:3]):
@@ -144,16 +164,14 @@ def check():
                                 ):
                                     hits += 1
                     if hits <= 10:
-                        buffer = QBuffer()
-                        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-                        image.scaledToWidth(1000).save(buffer, "JPEG", 35)
-                        screenshot = base64.b64encode(bytes(buffer.data())).decode("ascii")
+                        screenshot = Path("test-artifacts/plot-config-failure.png")
+                        screenshot.parent.mkdir(parents=True, exist_ok=True)
+                        image.save(str(screenshot))
                         raise AssertionError(
                             f"A Y-axis unit label was clipped: panel={panel}, unit={unit}, "
                             f"hits={hits}, expected={expected.name()}, ratio={ratio}, "
                             f"image={image.size()}, origin={origin}, label={rect}, "
-                            f"visible={axis.label.isVisible()}, html={axis.label.toHtml()}, "
-                            f"screenshot_jpeg_base64={screenshot}"
+                            f"visible={axis.label.isVisible()}, screenshot={screenshot}"
                         )
             # Assigning one channel to several plots must not duplicate CSV columns.
             from PySide6.QtWidgets import QFileDialog

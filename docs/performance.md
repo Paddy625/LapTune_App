@@ -65,7 +65,7 @@ the plot scene.
 
 `docs/benchmarks/mixed-axis-rendering.json` records a 186,400-sample, 90-frame check with ACC_X,
 GYRO_Z and speed together in plot 1 and the default ACC/gyro plots below (six series total).
-p95 steady repaint is 5.567 ms; including deliberate pan/zoom frames it is 23.289 ms. These
+p95 steady repaint is 5.293 ms; including deliberate pan/zoom frames it is 17.373 ms. These
 measurements use the same headless host methodology, with constructed data rather than disk I/O.
 Reproduce with `tools/benchmark_rendering.py --samples 186400 --frames 90 --mixed`. The benchmark
 uses temporary settings so it does not overwrite the user's saved plot layout.
