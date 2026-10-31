@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import numpy as np
 from PySide6.QtCore import QObject, QSettings, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -115,14 +115,14 @@ class MainWindow(QMainWindow):
         self.channel_dock.setObjectName("channels")
         self.map_dock.setObjectName("gps_map")
         file_menu = self.menuBar().addMenu("&File")
-        self.open_action = QAction("Open…", self)
+        self.open_action = QAction("Open file…", self)
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(self.choose_file)
-        file_menu.addAction(self.open_action)
         self.open_folder_action = QAction("Open folder…", self)
         self.open_folder_action.setShortcut("Ctrl+Shift+O")
         self.open_folder_action.triggered.connect(self.choose_folder)
         file_menu.addAction(self.open_folder_action)
+        file_menu.addAction(self.open_action)
         self.recent_menu = file_menu.addMenu("Recent files and folders")
         self._refresh_recent()
         self.export_menu = QMenu("Export", self)
@@ -140,12 +140,31 @@ class MainWindow(QMainWindow):
         session_menu.addAction("Data quality and distance report…", self.show_quality)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("Controls and privacy", self.show_help)
+        self.brand_logo = QLabel()
+        self.brand_logo.setObjectName("laptune_brand")
+        self.brand_logo.setAccessibleName("LapTune")
+        self.brand_logo.setToolTip("LapTune · Telemetry Viewer")
+        logo = QPixmap(str(Path(__file__).parent / "assets" / "laptune-logo.png"))
+        # Display the supplied wide wordmark without its large exterior canvas margins.
+        logo = logo.copy(105, 164, 1958, 392)
+        self.brand_logo.setPixmap(
+            logo.scaled(
+                180,
+                36,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self.brand_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.brand_logo.setFixedSize(194, 42)
+        self.brand_logo.setStyleSheet("background: #000; border-radius: 4px; margin: 2px 5px;")
+        self.menuBar().setCornerWidget(self.brand_logo, Qt.Corner.TopRightCorner)
         toolbar = QToolBar("Analysis")
         toolbar.setObjectName("analysis")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
-        toolbar.addAction(self.open_action)
         toolbar.addAction(self.open_folder_action)
+        toolbar.addAction(self.open_action)
         recent = QToolButton()
         recent.setText("Recent")
         recent.setMenu(self.recent_menu)

@@ -21,6 +21,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "telemetry_viewer.maps" = ["assets/*", "assets/images/*"]
+"telemetry_viewer.gui" = ["assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

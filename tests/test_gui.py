@@ -53,3 +53,27 @@ def test_gui_import_plots_and_bidirectional_map(tmp_path, folder):
     if folder:
         assert result_data["source_names"] == ["LOG2.TXT", "LOG10.TXT"]
     assert "GUI_SMOKE_PASS" in result.stdout
+
+
+@pytest.mark.gui
+def test_large_session_rendering_and_branding(tmp_path):
+    environment = os.environ.copy()
+    environment["XDG_CONFIG_HOME"] = str(tmp_path / "config")
+    environment["XDG_CACHE_HOME"] = str(tmp_path / "cache")
+    if sys.platform == "linux":
+        environment.update(
+            QT_QPA_PLATFORM="offscreen",
+            QT_QUICK_BACKEND="software",
+            QT_OPENGL="software",
+            QTWEBENGINE_DISABLE_SANDBOX="1",
+            QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --disable-dev-shm-usage",
+        )
+    result = subprocess.run(
+        [sys.executable, "tools/check_rendering.py"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "RENDER_CHECK_PASS" in result.stdout

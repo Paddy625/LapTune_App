@@ -44,3 +44,20 @@ Time and distance processing runs only once for the combined session. The worker
 installs a complete session atomically; any file error leaves the current session visible.
 Source-file ranges also protect every input from export overwrites. No external dependency or
 server is required for folder discovery, concatenation or numeric filename ordering.
+
+
+Rendering reduction is configured on PlotItem because adding a PlotDataItem overrides its
+constructor's downsampling options. The factor is recalculated from binary-searched visible
+sample counts, so nonuniform time, gaps and distance plateaus do not rely on a global mean rate.
+Axes use DeviceCoordinateCache; the application keeps Qt's pixmap cache at least 64 MiB.
+Masked source values are cached for the current session and cleared when another session loads.
+Shared channel timelines reuse the source distance array; independent timelines still map by time.
+
+The scene has one mouse proxy shared by all four panels. Source-file and GPS cursor lookups
+use binary search without gathering whole arrays. The map omits repeated consecutive coordinates
+from the rendered route and isolates its Canvas renderer from the marker's SVG renderer.
+See performance.md for measurements and the scope of the synthetic million-sample check.
+
+The toolbar places folder import before single-file import. A prepared adaptation of the
+user-supplied LapTune wordmark appears in the menu bar's top-right corner. Its PNG is included
+in wheel package data and the PyInstaller spec; source and frozen GUI smoke checks require it.

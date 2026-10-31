@@ -11,8 +11,8 @@
    thresholds and stronger uncertainty handling through GNSS outages. Add a user-facing
    interpolation policy selector only with tested source-specific semantics.
 4. Profile genuinely large logs (100k–1M rows), then consider chunked import, cached multi-scale
-   min/max rendering and a spatial index for dense route clicks. No million-sample benchmark
-   or corresponding performance guarantee exists yet.
+   min/max rendering and a spatial index for dense route clicks. A synthetic million-sample interaction/rendering benchmark now exists (performance.md).
+   Real million-row TXT parsing, sustained operation and memory profiling still need validation.
 5. Add separate offline CAN/OBD and DBC decoding adapters. Live vehicle connections are outside
    this MVP. Consider MoTeC export only after documenting format/licensing and implementing
    interoperability tests; there is no guessed `.ld` writer or misleading export button.

@@ -13,7 +13,8 @@ No backend service; raw logs stay on your computer.
   acquisition order, raw date/time and point-corrected monotonic display time.
 - Generic numeric channels, individual channel time arrays, validity and source metadata.
   No fixed IMU/GPS refresh frequency is assumed. An unknown numeric column appears automatically.
-- Up to four linked PyQtGraph panels, channel checkboxes/panel assignment, solo mode,
+- Folder-first toolbar, LapTune branding and up to four linked PyQtGraph panels,
+  channel checkboxes/panel assignment, solo mode,
   nearest recorded value readout, shared cursor, wheel/pan/rectangle zoom and fit all.
 - Time or distance axes without reimporting. Compare speed-integrated and GPS-geodesic distance.
 - Bundled Leaflet 1.9.4 with Qt WebChannel, route/marker, map-to-plot selection and offline mode.
@@ -117,7 +118,11 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 ## Controls and data interpretation
 
 - Channels: checkbox to show; Panel selector chooses plot 1–4; right-click to solo/hide all.
+- **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
+  is at the top right.
 - Wheel to zoom, drag to pan, right-drag to rectangle zoom, Ctrl+0/Fit all to reset.
+  Visible peak/min-max reduction adapts to viewport width and actual sample density; source
+  data, cursor values and exports retain their full resolution.
 - Hover/click a plot to move the common cursor. Click the map to choose the geographically
   nearest GPS change. Points within a 5 m ambiguity band prefer the active time fragment.
 - The map marker uses the nearest **recorded** accepted GPS change; no new GPS measurements
@@ -128,7 +133,8 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 - Quality report shows every issue with its physical file line, correction counts, GPS change
   count and the two distance totals. Row density is not the physical refresh rate of each sensor.
 
-See [data format and processing](docs/data-format.md) and [architecture](docs/architecture.md).
+See [data format and processing](docs/data-format.md), [architecture](docs/architecture.md)
+and [rendering performance measurements](docs/performance.md).
 
 ## Maps and privacy
 

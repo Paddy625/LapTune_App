@@ -5,7 +5,8 @@ analysis = Analysis(
     ['src/telemetry_viewer/__main__.py'],
     pathex=['src'],
     binaries=[],
-    datas=collect_data_files('telemetry_viewer.maps') + collect_data_files('tzdata'),
+    datas=collect_data_files('telemetry_viewer.maps') + collect_data_files('telemetry_viewer.gui')
+          + collect_data_files('tzdata'),
     hiddenimports=['PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
                    'PySide6.QtWebChannel'],
     hookspath=[],

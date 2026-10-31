@@ -1,5 +1,6 @@
 """Qt-free data model. Channel samples retain their own measurement times."""
 
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -67,9 +68,9 @@ class Session:
     source_lines: NDArray[np.int64] | None = None
 
     def source_for_sample(self, sample: int) -> SourceFile | None:
-        for source in self.source_files:
-            if source.start_row <= sample < source.end_row:
-                return source
+        index = bisect_right(self.source_files, sample, key=lambda source: source.start_row) - 1
+        if index >= 0 and sample < self.source_files[index].end_row:
+            return self.source_files[index]
         return None
 
     @property
@@ -86,6 +87,8 @@ class Session:
     def channel_axis(self, channel: Channel, mode: str) -> FloatArray:
         if mode == "time":
             return channel.time_s
+        if channel.time_s is self.elapsed_time_s:
+            return self.distance_m
         return np.interp(channel.time_s, self.elapsed_time_s, self.distance_m)
 
     def sample_at(self, x: float, mode: str, active: int = 0) -> int:
@@ -105,10 +108,12 @@ class Session:
         """Nearest existing accepted GPS fix in time; no manufactured measurements."""
         if not len(self.gps_fix_samples):
             return None
-        times = self.elapsed_time_s[self.gps_fix_samples]
+        # Both acquisition indices and display times are monotonic. Search indices first
+        # instead of allocating the entire GPS time array on every mouse movement.
         t = self.elapsed_time_s[sample]
-        i = min(int(np.searchsorted(times, t)), len(times) - 1)
-        if i and abs(times[i - 1] - t) <= abs(times[i] - t):
+        rows = self.gps_fix_samples
+        i = min(int(np.searchsorted(rows, sample)), len(rows) - 1)
+        if i and abs(self.elapsed_time_s[rows[i - 1]] - t) <= abs(self.elapsed_time_s[rows[i]] - t):
             i -= 1
         return int(self.gps_fix_samples[i])
 

@@ -80,9 +80,12 @@ class ChannelPanel(QTreeWidget):
         time = self.session.elapsed_time_s[sample]
         for name, (item, _, _) in self.items.items():
             channel = self.session.channels[name]
-            i = min(int(np.searchsorted(channel.time_s, time)), len(channel.time_s) - 1)
-            if i and abs(channel.time_s[i - 1] - time) <= abs(channel.time_s[i] - time):
-                i -= 1
+            if channel.time_s is self.session.elapsed_time_s:
+                i = sample
+            else:
+                i = min(int(np.searchsorted(channel.time_s, time)), len(channel.time_s) - 1)
+                if i and abs(channel.time_s[i - 1] - time) <= abs(channel.time_s[i] - time):
+                    i -= 1
             item.setText(2, f"{channel.samples[i]:.3f}" if channel.valid[i] else "invalid")
             item.setToolTip(2, f"Nearest recorded sample at {channel.time_s[i]:.6f} s")
 

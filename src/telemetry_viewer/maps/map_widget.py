@@ -78,15 +78,20 @@ class MapWidget(QWidget):
         if not self.is_ready:
             return
         segments = []
+        previous = None
         for row, starts in zip(session.gps_fix_samples, session.gps_segment_start, strict=True):
             if starts or not segments:
                 segments.append([])
-            segments[-1].append(
-                [
-                    float(session.channels["GPS_LAT"].samples[row]),
-                    float(session.channels["GPS_LON"].samples[row]),
-                ]
+                previous = None
+            point = (
+                float(session.channels["GPS_LAT"].samples[row]),
+                float(session.channels["GPS_LON"].samples[row]),
             )
+            # Speed may refresh faster than coordinates. Keep source fixes intact, but
+            # drawing the same geographic vertex repeatedly adds no route detail.
+            if point != previous:
+                segments[-1].append(point)
+                previous = point
         self.page.runJavaScript("setRoute(" + json.dumps(segments, allow_nan=False) + ")")
         self.set_cursor(0)
 

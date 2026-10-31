@@ -7,7 +7,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 bundle = Path(sys.argv[1]).resolve()
-for pattern in ("QtWebEngineProcess.exe", "qtwebengine_resources.pak", "icudtl.dat", "en-US.pak"):
+for pattern in (
+    "QtWebEngineProcess.exe",
+    "qtwebengine_resources.pak",
+    "icudtl.dat",
+    "en-US.pak",
+    "laptune-logo.png",
+):
     if not list(bundle.rglob(pattern)):
         raise RuntimeError(f"Required frozen WebEngine resource missing: {pattern}")
 with TemporaryDirectory() as temp:

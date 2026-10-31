@@ -50,6 +50,7 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
                 s = window.session
                 assert len(s.nr) > 1 and len(s.gps_fix_samples) > 1
                 assert window.plots.curves
+                assert not window.brand_logo.pixmap().isNull()
                 assert window.open_folder_action.shortcut().toString() == "Ctrl+Shift+O"
                 for source in s.source_files:
                     assert window.is_source_file(source.path)
@@ -63,7 +64,9 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
                 )
                 window.axis_combo.setCurrentText("Time")
                 assert window.plots.mode == "time"
-                assert len(next(iter(window.plots.curves.values()))[0].getData()[0]) == len(s.nr)
+                assert len(
+                    next(iter(window.plots.curves.values()))[0].getOriginalDataset()[0]
+                ) == len(s.nr)
                 window.plots.fit_all()
                 state["phase"] = "checking_js"
                 window.map_widget.page.runJavaScript(

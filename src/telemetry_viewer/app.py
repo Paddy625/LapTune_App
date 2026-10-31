@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QPixmapCache
 from PySide6.QtWidgets import QApplication
 
 from telemetry_viewer.gui.main_window import MainWindow
@@ -42,6 +43,9 @@ def create_application(argv=None):
     app.setApplicationName("Telemetry Viewer")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
+    # Several rasterized axes on a HiDPI screen exceed Qt's default 10 MiB cache.
+    # Avoid evicting/repainting tick labels every time the shared cursor moves.
+    QPixmapCache.setCacheLimit(max(QPixmapCache.cacheLimit(), 64 * 1024))
     return app
 
 

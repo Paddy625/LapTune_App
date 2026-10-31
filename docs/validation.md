@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **33 passed**, including the optional private-log integration test.
+- `pytest -q`: **37 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -29,7 +29,7 @@ Versions used by the source/test workflow are constrained in `constraints.txt`.
 The initial implementation's Windows source tests, frozen EXE/resource smoke and ZIP packaging
 passed in [GitHub Actions](https://github.com/Paddy625/LapTune_App/actions/runs/41229959076).
 This run predates folder support; check the workflow for the current commit for its Windows result.
-Not executed locally: Windows 10/11 manual launch, online map/satellite tiles or 1M-sample benchmark.
+Not executed locally: Windows 10/11 manual launch, online map/satellite tiles or a million-row TXT import benchmark.
 
 For isolated Linux GUI checks, set `QT_QPA_PLATFORM=offscreen`,
 `QT_QUICK_BACKEND=software`, `QT_OPENGL=software`,
@@ -37,3 +37,12 @@ For isolated Linux GUI checks, set `QT_QPA_PLATFORM=offscreen`,
 CI/container test, `QTWEBENGINE_DISABLE_SANDBOX=1`. The app does not set this flag itself.
 Qt may report absent GPU/DBus in this headless environment; the assertions require actual
 local page initialization and bidirectional WebChannel behavior regardless of those messages.
+
+
+Interactive rendering update: 37 local tests passed, including new GUI regression checks on
+186,400 synthetic samples with narrow spikes and nonuniform timestamps. Tests check actual
+reduced point count, full source arrays, separate Leaflet renderers and zero static-route redraws
+on marker movement, branding/action order and allocation-free GPS timeline lookup. Rendering
+benchmarks were also executed on synthetic sessions of 186,400 and 1,000,000 samples; see
+performance.md and docs/benchmarks/. These synthetic sessions bypass TXT parsing.
+The screenshot was regenerated from synthetic data and shows the folder-first toolbar and logo.
