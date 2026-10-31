@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Local desktop analysis for STM32 IMU and GPS logs"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26,<3", "PySide6>=6.7,<7", "pyqtgraph>=0.13.7,<0.15"]
+dependencies = ["tzdata>=2025.1", "numpy>=1.26,<3", "PySide6>=6.7,<7", "pyqtgraph>=0.13.7,<0.15"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.9,<1", "pyinstaller>=6.11,<7"]

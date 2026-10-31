@@ -115,7 +115,16 @@ class LegacyTxtImporter:
             valid = np.isfinite(samples)
             if name in ("GPS_LAT", "GPS_LON"):
                 valid &= abs(samples) <= (90 if name == "GPS_LAT" else 180)
-            channels[name] = Channel(name, unit, "Logger", group, samples, time, valid, frequency)
+            channels[name] = Channel(
+                name,
+                unit,
+                "Logger",
+                group,
+                samples,
+                time,
+                valid,
+                None if group == "GPS" else frequency,
+            )
         nan = np.full(len(time), np.nan)
         speed = channels["GPS_SPEED_KMH"].samples if "GPS_SPEED_KMH" in channels else nan
         if "GPS_LAT" in channels and "GPS_LON" in channels:

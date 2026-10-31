@@ -19,6 +19,7 @@ def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0):
     distance = np.zeros(len(time), dtype=np.float64)
     previous_state = None
     anchor = None
+    coordinate_anchor = None
     gap = True
     total = 0.0
     for i in range(len(time)):
@@ -37,7 +38,7 @@ def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0):
                 if anchor is None
                 else float(haversine_m(lat[anchor], lon[anchor], lat[i], lon[i]))
             )
-            dt = time[i] - time[anchor] if anchor is not None else 0
+            dt = time[i] - time[coordinate_anchor] if coordinate_anchor is not None else 0
             if not gap and step > max_speed_m_s * max(dt, 1e-6):
                 issues.append(
                     QualityIssue(lines[i], "gps_jump", "GPS jump exceeds 100 m/s; rejected")
@@ -48,6 +49,8 @@ def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0):
                 total += step
             fixes.append(i)
             starts.append(gap)
+            if gap or step > 0:
+                coordinate_anchor = i
             anchor, gap = i, False
         distance[i] = total
     return np.array(fixes, dtype=np.int64), np.array(starts, dtype=bool), distance, issues
