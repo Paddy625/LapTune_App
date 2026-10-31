@@ -50,9 +50,17 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
                 s = window.session
                 assert len(s.nr) > 1 and len(s.gps_fix_samples) > 1
                 assert window.plots.curves
+                assert window.open_folder_action.shortcut().toString() == "Ctrl+Shift+O"
+                for source in s.source_files:
+                    assert window.is_source_file(source.path)
+                assert not window.is_source_file(path.parent / "export-check.csv")
                 window.axis_combo.setCurrentText("Distance")
                 assert window.plots.mode == "distance"
                 window.set_cursor(len(s.nr) // 2)
+                assert (
+                    s.source_for_sample(window.cursor_sample).path.name
+                    in window.cursor_label.text()
+                )
                 window.axis_combo.setCurrentText("Time")
                 assert window.plots.mode == "time"
                 assert len(next(iter(window.plots.curves.values()))[0].getData()[0]) == len(s.nr)
@@ -82,7 +90,14 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
                 )
                 if result_path:
                     result_path.write_text(
-                        json.dumps({"passed": True, "samples": len(window.session.nr)})
+                        json.dumps(
+                            {
+                                "passed": True,
+                                "samples": len(window.session.nr),
+                                "source_files": len(window.session.source_files),
+                                "source_names": [s.path.name for s in window.session.source_files],
+                            }
+                        )
                     )
                 timer.stop()
                 window.close()

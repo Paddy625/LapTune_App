@@ -82,3 +82,25 @@ indices use a custom extension. Standard GPX `<time>` is omitted when timezone i
 When an IANA timezone is explicitly configured, valid times are converted to UTC; ambiguous or
 nonexistent DST times fail export with a request to clear/resolve the zone. Neither exporter
 modifies the source file. GUI prevents choosing the input as the export destination.
+
+## Folder import
+
+`LegacyTxtImporter.load` accepts either a file or a folder. Only immediate files with a
+case-insensitive `.txt` suffix are included. Numeric filename groups are compared as integers,
+left to right; equal numeric keys use case-insensitive name followed by the original name.
+Unnumbered TXT filenames follow all numbered files in alphabetical order. Each file has its own
+header, so optional column order and channel presence may differ. The union of numeric channels
+is retained; absent values get NaN with invalid masks, not interpolated or carried measurements.
+
+Parsing accumulates rows in this exact file order, without NR/timestamp sorting or automatic
+deduplication. A reset of NR across files is reported and preserved. Time correction, GPS-state
+change detection and distance integration run once over the combined raw timeline, keeping
+normal recording continuity and detecting time anomalies at file boundaries. Existing long-gap
+speed-hold semantics remain in effect; a folder does not imply independent time-zero sessions.
+
+Session `source_files` records each resolved input path and its half-open row range; `source_lines`
+retains the physical line for every accepted row. Quality issues carry a source basename. Exports
+include basenames and line numbers, without exposing absolute source paths in metadata.
+A structurally unusable/empty file stops the whole import with its filename. No partial session is
+installed in the UI and no input file is modified. The file list is captured when importing;
+this operation does not watch for files created later by an active logger.

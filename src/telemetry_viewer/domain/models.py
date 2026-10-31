@@ -1,6 +1,7 @@
 """Qt-free data model. Channel samples retain their own measurement times."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -14,6 +15,14 @@ class QualityIssue:
     line: int
     code: str
     message: str
+    source: str = ""
+
+
+@dataclass
+class SourceFile:
+    path: Path
+    start_row: int
+    end_row: int  # Exclusive index in the combined session.
 
 
 @dataclass
@@ -54,6 +63,14 @@ class Session:
     issues: list[QualityIssue] = field(default_factory=list)
     metadata: SessionMetadata = field(default_factory=SessionMetadata)
     distance_method: str = "speed"
+    source_files: list[SourceFile] = field(default_factory=list)
+    source_lines: NDArray[np.int64] | None = None
+
+    def source_for_sample(self, sample: int) -> SourceFile | None:
+        for source in self.source_files:
+            if source.start_row <= sample < source.end_row:
+                return source
+        return None
 
     @property
     def distance_m(self) -> FloatArray:

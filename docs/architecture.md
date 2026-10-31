@@ -36,3 +36,11 @@ for analog resampling an importer/processing stage must explicitly opt into line
 Future CAN hardware acquisition and DBC decoding belong in separate adapters/services and must
 not become Qt widget or legacy-text parser logic. A format selector/registry can be added when
 a second concrete importer exists.
+
+
+Folder imports share the legacy parser with single-file imports. Discovery orders numeric
+filename groups before parsing, then the parser builds a union of channels and source row ranges.
+Time and distance processing runs only once for the combined session. The worker's result signal
+installs a complete session atomically; any file error leaves the current session visible.
+Source-file ranges also protect every input from export overwrites. No external dependency or
+server is required for folder discovery, concatenation or numeric filename ordering.

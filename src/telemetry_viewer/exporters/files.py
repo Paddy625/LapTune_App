@@ -24,6 +24,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
         writer = csv.writer(handle)
         writer.writerow(
             ["row_index", "NR", "timestamp_raw", "elapsed_time_s [s]", "distance_m [m]"]
+            + (["source_file", "source_line"] if session.source_files else [])
             + [f"{n} [{session.channels[n].unit}]" for n in names]
         )
         aligned = []
@@ -33,7 +34,16 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
             indices = np.clip(indices, 0, len(channel.time_s) - 1)
             valid = (channel.time_s[indices] == session.elapsed_time_s) & channel.valid[indices]
             aligned.append(np.where(valid, channel.samples[indices], np.nan))
+        source_index = 0
         for i in range(len(session.nr)):
+            provenance = []
+            if session.source_files:
+                while i >= session.source_files[source_index].end_row:
+                    source_index += 1
+                provenance = [
+                    session.source_files[source_index].path.name,
+                    int(session.source_lines[i]) if session.source_lines is not None else "",
+                ]
             writer.writerow(
                 [
                     i,
@@ -42,6 +52,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                     format(session.elapsed_time_s[i], ".9f"),
                     format(session.distance_m[i], ".9f"),
                 ]
+                + provenance
                 + [float(a[i]) if np.isfinite(a[i]) else "" for a in aligned]
             )
     path.with_suffix(path.suffix + ".metadata.json").write_text(
@@ -49,6 +60,14 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
             {
                 "session": asdict(session.metadata),
                 "distance_method": session.distance_method,
+                "source_files": [
+                    {
+                        "name": source.path.name,
+                        "start_row": source.start_row,
+                        "end_row": source.end_row,
+                    }
+                    for source in session.source_files
+                ],
                 "channels": {
                     n: {
                         "unit": session.channels[n].unit,
@@ -105,4 +124,9 @@ def export_gpx(session: Session, path: Path) -> None:
         ext = ET.SubElement(point, f"{{{ns}}}extensions")
         ET.SubElement(ext, f"{{{tv}}}timestamp_raw").text = session.timestamp_raw[i]
         ET.SubElement(ext, f"{{{tv}}}row_index").text = str(i)
+        source = session.source_for_sample(int(i))
+        if source is not None:
+            ET.SubElement(ext, f"{{{tv}}}source_file").text = source.path.name
+            if session.source_lines is not None:
+                ET.SubElement(ext, f"{{{tv}}}source_line").text = str(session.source_lines[i])
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)

@@ -3,12 +3,15 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **22 passed**, including the optional private-log integration test.
+- `pytest -q`: **33 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
   local Leaflet route and marker, plot-to-map cursor and JavaScript-to-Python selection passed
-  on the synthetic fixture using Linux offscreen software rendering.
+  on the synthetic single-file and split-folder fixtures using Linux offscreen software rendering.
+- Folder regression tests cover numeric order, mixed-case extensions, direct children only,
+  absent channels, unchanged inputs, cross-file GPS deduplication/time/distance, source-aware
+  diagnostics and exports, invalid-file errors, aggregate progress and cancellation.
 - Local PyInstaller **Linux** onedir build and the frozen application's offline GUI smoke passed.
   This validates local-resource packaging on Linux, not Windows compatibility.
 - The private input retained **18,640** samples over **180.272 s**, with **32** point time
@@ -23,11 +26,10 @@ Versions used by the source/test workflow are constrained in `constraints.txt`.
 - The documentation screenshot was captured from the real application using
   `tools/capture_demo.py docs/synthetic-demo.png`. Its route and channels are generated.
 
-Not executed: Windows source/frozen smoke, Windows 10/11 manual launch, online map tiles,
-licensed satellite tiles, or 1M-sample benchmark. Source CI and Windows onedir ZIP jobs are
-provided, including required WebEngine-resource checks and a packaged-EXE smoke test.
-Git push was rejected with HTTP 403; GitHub API requests were also denied. No successful
-Actions run, pull request, published branch or Windows download is claimed.
+The initial implementation's Windows source tests, frozen EXE/resource smoke and ZIP packaging
+passed in [GitHub Actions](https://github.com/Paddy625/LapTune_App/actions/runs/41229959076).
+This run predates folder support; check the workflow for the current commit for its Windows result.
+Not executed locally: Windows 10/11 manual launch, online map/satellite tiles or 1M-sample benchmark.
 
 For isolated Linux GUI checks, set `QT_QPA_PLATFORM=offscreen`,
 `QT_QUICK_BACKEND=software`, `QT_OPENGL=software`,

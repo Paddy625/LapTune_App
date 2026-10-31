@@ -8,7 +8,8 @@ No backend service; raw logs stay on your computer.
 
 ## Current implementation
 
-- Semicolon TXT import in a Qt worker with progress, line-numbered diagnostics, preserved
+- Single-file or whole-folder semicolon TXT import in a Qt worker with progress,
+  numeric filename ordering, source-file diagnostics and preserved
   acquisition order, raw date/time and point-corrected monotonic display time.
 - Generic numeric channels, individual channel time arrays, validity and source metadata.
   No fixed IMU/GPS refresh frequency is assumed. An unknown numeric column appears automatically.
@@ -22,11 +23,11 @@ No backend service; raw logs stay on your computer.
 - PyInstaller onedir spec and GitHub Actions jobs for source tests, Windows packaging and a
   smoke test of the **actual frozen Windows executable**, including WebEngine resources.
 
-**Validation status:** source tests, offline GUI smoke and a frozen **Linux** package were
-executed in the development environment. Windows CI/EXE has not yet been executed: GitHub
-push returned HTTP 403 and GitHub API access was denied. No Windows download is available yet.
-The private LOG0023.TXT integration test is optional and excluded from Git.
-See [validation results](docs/validation.md) for measured evidence and limits.
+**Validation status:** local source tests and offline GUI smoke cover both single-file and
+folder import. The initial Windows source tests, frozen EXE smoke and ZIP packaging passed in
+[GitHub Actions](https://github.com/Paddy625/LapTune_App/actions/runs/41229959076).
+For later changes, use the Actions run for the commit you download. The private LOG0023.TXT
+integration test is optional and excluded from Git. See [validation results](docs/validation.md).
 
 ## Windows PowerShell · VS Code
 
@@ -44,7 +45,28 @@ In VS Code, run **Python: Select Interpreter**, choose `.venv\Scripts\python.exe
 A launch configuration and recommended Python/Ruff extensions are included.
 No PowerShell activation or execution-policy change is necessary.
 
-Open your own data using Ctrl+O or drag-and-drop. For the optional real-data integration test,
+Open one file using Ctrl+O, or choose **File > Open folder…** / **Ctrl+Shift+O** to read all
+TXT files directly in a selected folder. You can also drop a folder onto the window or open it
+from the command line:
+
+```powershell
+.\.venv\Scripts\python.exe -m telemetry_viewer "C:\Logs\Drive"
+```
+
+Files are read in ascending numerical filename order, e.g. `LOG2.txt`, `LOG003.TXT`, `LOG10.txt`.
+Extensions are case-insensitive. Subfolders are not traversed. If a name contains several number
+groups, they are compared from left to right; ties use the filename. Names without numbers follow
+numbered files alphabetically. Every TXT file needs its own logger header and usable data rows.
+An empty or incompatible file aborts the import with its name, leaving the previous session open.
+
+The folder becomes one session: raw timestamps and row order are retained, while the time axis,
+GPS changes and both distances are calculated across file boundaries. Missing optional channels
+are marked invalid in the affected rows. The cursor shows the source filename; the quality report
+lists files in order and identifies warnings by filename and physical line. CSV adds `source_file`
+and `source_line`, and GPX includes them as extensions. Export cannot overwrite an input log.
+Folder imports use the same background worker and can be reopened from Recent files and folders.
+
+For the optional real-data integration test,
 put the original file at `data/local/LOG0023.TXT`. That directory and TXT logs under `data/`
 are ignored by Git. Never add private logs using `git add -f`.
 
@@ -90,7 +112,6 @@ After a successful GitHub Actions run, open
 and download the **TelemetryViewer-Windows-x64** artifact. GitHub wraps the generated
 `TelemetryViewer-Windows-x64.zip` in an artifact download. Extract the ZIP(s), then run
 `TelemetryViewer\TelemetryViewer.exe`. Python need not be installed on the target computer.
-There is no verified artifact or direct download URL until a successful run exists.
 This is a portable **onedir** build, not a standalone onefile EXE.
 
 ## Controls and data interpretation
@@ -124,7 +145,7 @@ permission/key where required, and attribution text. Keys/URLs stay in local QSe
 not in this repository. You are responsible for your provider's terms. No satellite provider
 has been tested in this environment. Qt uses a memory-only web profile.
 Recent paths, geometry, timezone/unit labels and provider settings persist locally; clear
-recent history from File > Recent files. A Windows QSettings profile lives under
+recent history from File > Recent files and folders. A Windows QSettings profile lives under
 `HKEY_CURRENT_USER\Software\LapTune\TelemetryViewer`.
 
 ## Scope and next steps

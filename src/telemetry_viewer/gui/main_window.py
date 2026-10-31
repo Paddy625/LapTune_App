@@ -119,7 +119,11 @@ class MainWindow(QMainWindow):
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(self.choose_file)
         file_menu.addAction(self.open_action)
-        self.recent_menu = file_menu.addMenu("Recent files")
+        self.open_folder_action = QAction("Open folder…", self)
+        self.open_folder_action.setShortcut("Ctrl+Shift+O")
+        self.open_folder_action.triggered.connect(self.choose_folder)
+        file_menu.addAction(self.open_folder_action)
+        self.recent_menu = file_menu.addMenu("Recent files and folders")
         self._refresh_recent()
         self.export_menu = QMenu("Export", self)
         self.export_menu.addAction("Selected channels to CSV…", lambda: self.export("csv"))
@@ -141,6 +145,7 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
         toolbar.addAction(self.open_action)
+        toolbar.addAction(self.open_folder_action)
         recent = QToolButton()
         recent.setText("Recent")
         recent.setMenu(self.recent_menu)
@@ -183,7 +188,8 @@ class MainWindow(QMainWindow):
     def _refresh_recent(self):
         self.recent_menu.clear()
         for path in self.settings.value("recent", [], type=list):
-            self.recent_menu.addAction(Path(path).name, lambda p=path: self.load_file(p))
+            label = Path(path).name + (" (folder)" if Path(path).is_dir() else "")
+            self.recent_menu.addAction(label, lambda p=path: self.load_file(p))
         self.recent_menu.addSeparator()
         self.recent_menu.addAction("Clear history", self.clear_recent)
 
@@ -198,11 +204,17 @@ class MainWindow(QMainWindow):
         if path:
             self.load_file(path)
 
+    def choose_folder(self):
+        path = QFileDialog.getExistingDirectory(self, "Open folder of logger TXT files")
+        if path:
+            self.load_file(path)
+
     def load_file(self, path):
         if self.thread is not None:
             return
         self.pending_path = Path(path).resolve()
         self.open_action.setEnabled(False)
+        self.open_folder_action.setEnabled(False)
         self.progress.setValue(0)
         self.progress.show()
         self.thread = QThread(self)
@@ -225,6 +237,7 @@ class MainWindow(QMainWindow):
     def import_finished(self):
         self.thread = None
         self.open_action.setEnabled(True)
+        self.open_folder_action.setEnabled(True)
         self.progress.hide()
         if self.closing:
             self.close()
@@ -328,6 +341,9 @@ class MainWindow(QMainWindow):
         self.cursor_label.setText(
             f"Row {i:,} · NR {s.nr[i]} · {s.elapsed_time_s[i]:.3f} s · {s.distance_m[i]:.1f} m"
         )
+        source = s.source_for_sample(i)
+        if source is not None:
+            self.cursor_label.setText(self.cursor_label.text() + f" · {source.path.name}")
 
     def layer_changed(self, mode):
         url = self.settings.value("satellite_url", "")
@@ -442,13 +458,19 @@ class MainWindow(QMainWindow):
             "alone cannot prove whether a new measurement arrived.</p>"
         )
         layout.addWidget(report)
-        table = QTableWidget(len(s.issues), 3)
-        table.setHorizontalHeaderLabels(["File line", "Code", "Diagnostic"])
+        source_list = "".join(
+            f"<li>{html.escape(source.path.name)}: "
+            f"{source.end_row - source.start_row:,} samples</li>"
+            for source in s.source_files
+        )
+        report.append(f"<h3>Files in acquisition order</h3><ol>{source_list}</ol>")
+        table = QTableWidget(len(s.issues), 4)
+        table.setHorizontalHeaderLabels(["Source file", "File line", "Code", "Diagnostic"])
         for row, issue in enumerate(s.issues):
-            for col, text in enumerate([str(issue.line), issue.code, issue.message]):
+            for col, text in enumerate([issue.source, str(issue.line), issue.code, issue.message]):
                 table.setItem(row, col, QTableWidgetItem(text))
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(table)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close.rejected.connect(dialog.reject)
@@ -475,9 +497,8 @@ class MainWindow(QMainWindow):
         target = Path(path)
         if not target.suffix:
             target = target.with_suffix("." + kind)
-        if self.source_path and (
-            target.resolve() == self.source_path
-            or target.with_suffix(target.suffix + ".metadata.json").resolve() == self.source_path
+        if self.is_source_file(target) or self.is_source_file(
+            target.with_suffix(target.suffix + ".metadata.json")
         ):
             QMessageBox.warning(
                 self, "Protected input", "Choose an output different from the input log."
@@ -493,11 +514,19 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("Export saved: " + target.name, 6000)
 
+    def is_source_file(self, path):
+        resolved = Path(path).resolve()
+        return resolved == self.source_path or any(
+            resolved == source.path for source in self.session.source_files
+        )
+
     def show_help(self):
         QMessageBox.information(
             self,
             "Controls and privacy",
-            "Ctrl+O or drop a TXT file to import. Wheel: zoom; drag: pan; "
+            "Ctrl+O opens a file; Ctrl+Shift+O opens a folder of TXT logs "
+            "in numeric filename order. "
+            "Drop a file or folder to import. Wheel: zoom; drag: pan; "
             "right-drag: rectangle zoom; Ctrl+0: fit all. Hover/click plots "
             "to move cursor. Click the map to select the nearest GPS change; "
             "repeated passages prefer the active time.\n\n"
@@ -505,19 +534,25 @@ class MainWindow(QMainWindow):
             "Distance plateaus preserve the active time where possible.\n\n"
             "Logs remain local. Online maps request tiles around the route, "
             "revealing the viewed area to the provider. Choose Offline to "
-            "avoid tile requests. Recent paths/settings remain on this computer.",
+            "avoid tile requests. Recent paths/settings remain on this computer.\n\n"
+            "Folder import includes .txt files directly in that folder (no subfolders). "
+            "Each file must have its own logger header and usable rows. An unusable file "
+            "stops import with its filename; the previous session remains open.",
         )
 
     def dragEnterEvent(self, event):
         if any(
-            url.isLocalFile() and url.toLocalFile().lower().endswith(".txt")
+            url.isLocalFile()
+            and (Path(url.toLocalFile()).is_dir() or url.toLocalFile().lower().endswith(".txt"))
             for url in event.mimeData().urls()
         ):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
         for url in event.mimeData().urls():
-            if url.isLocalFile() and url.toLocalFile().lower().endswith(".txt"):
+            if url.isLocalFile() and (
+                Path(url.toLocalFile()).is_dir() or url.toLocalFile().lower().endswith(".txt")
+            ):
                 self.load_file(url.toLocalFile())
                 event.acceptProposedAction()
                 break

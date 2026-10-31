@@ -47,7 +47,7 @@ def create_application(argv=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Local IMU/GPS telemetry analysis")
-    parser.add_argument("file", nargs="?", type=Path)
+    parser.add_argument("file", nargs="?", type=Path, help="Logger TXT file or folder of TXT logs")
     parser.add_argument(
         "--smoke-test",
         type=Path,
