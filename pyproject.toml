@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telemetry-viewer"
+version = "0.1.0"
+description = "Local desktop analysis for STM32 IMU and GPS logs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26,<3", "PySide6>=6.7,<7", "pyqtgraph>=0.13.7,<0.15"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1", "pyinstaller>=6.11,<7"]
+
+[project.scripts]
+telemetry-viewer = "telemetry_viewer.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"telemetry_viewer.maps" = ["assets/*", "assets/images/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["gui: Qt and WebEngine integration", "local: optional private logger data"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
