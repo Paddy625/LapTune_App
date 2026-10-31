@@ -8,6 +8,7 @@ permissions:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -24,6 +25,9 @@ jobs:
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - run: python -m pytest -q --junitxml=test-results.xml
+      - name: Report test failures in GitHub annotations
+        if: failure() && hashFiles('test-results.xml') != ''
+        run: python tools/report_test_failures.py test-results.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
