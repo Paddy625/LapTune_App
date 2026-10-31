@@ -1,5 +1,6 @@
 """Real Qt interaction check for independent Y axes, wheel zoom and plot configuration."""
 
+import base64
 import csv
 import json
 from pathlib import Path
@@ -9,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pyqtgraph as pg
 from benchmark_rendering import synthetic_session
-from PySide6.QtCore import QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QBuffer, QIODevice, QPoint, QPointF, Qt, QTimer
 from PySide6.QtGui import QWheelEvent
 
 from telemetry_viewer.app import create_application, isolated_settings
@@ -117,8 +118,8 @@ def check():
             image = window.grab().toImage()
             ratio = window.devicePixelRatioF()
             viewport = window.plots.graphics.viewport()
-            for axes in window.plots.unit_axes[:3]:
-                for axis in axes.values():
+            for panel, axes in enumerate(window.plots.unit_axes[:3]):
+                for unit, axis in axes.items():
                     rect = window.plots.graphics.mapFromScene(
                         axis.label.sceneBoundingRect()
                     ).boundingRect()
@@ -142,7 +143,18 @@ def check():
                                     < 65
                                 ):
                                     hits += 1
-                    assert hits > 10, "A Y-axis unit label was clipped"
+                    if hits <= 10:
+                        buffer = QBuffer()
+                        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                        image.scaledToWidth(1000).save(buffer, "JPEG", 35)
+                        screenshot = base64.b64encode(bytes(buffer.data())).decode("ascii")
+                        raise AssertionError(
+                            f"A Y-axis unit label was clipped: panel={panel}, unit={unit}, "
+                            f"hits={hits}, expected={expected.name()}, ratio={ratio}, "
+                            f"image={image.size()}, origin={origin}, label={rect}, "
+                            f"visible={axis.label.isVisible()}, html={axis.label.toHtml()}, "
+                            f"screenshot_jpeg_base64={screenshot}"
+                        )
             # Assigning one channel to several plots must not duplicate CSV columns.
             from PySide6.QtWidgets import QFileDialog
 
