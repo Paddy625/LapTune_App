@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QTimer
 
-from telemetry_viewer.app import create_application
+from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.domain.models import Channel, Session, SourceFile
 from telemetry_viewer.gui.main_window import MainWindow
 
@@ -56,7 +56,11 @@ def main():
     parser.add_argument("--samples", type=int, default=186400)
     parser.add_argument("--frames", type=int, default=90)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--mixed", action="store_true", help="Mix acceleration, gyro and speed on plot 1"
+    )
     args = parser.parse_args()
+    preferences = isolated_settings()
     app = create_application([])
     window = MainWindow()
     window.layer_combo.setCurrentText("Offline")
@@ -68,6 +72,8 @@ def main():
     initial = time.perf_counter()
     window.pending_path = Path("synthetic-benchmark").resolve()
     window.accept_session(session)
+    if args.mixed:
+        window.channels.apply_plot_selection(0, ["ACC_X", "GYRO_Z", "GPS_SPEED_KMH"])
     load_seconds = time.perf_counter() - initial
     expected_curves = [id(c) for c, _ in window.plots.curves.values()]
     timer = QTimer(window)
@@ -77,6 +83,7 @@ def main():
             "samples": args.samples,
             "files": len(session.source_files),
             "frames": len(cursor),
+            "mixed_units": args.mixed,
             "gui_setup_s": round(load_seconds, 3),
             "cursor_p95_ms": round(float(np.percentile(cursor, 95)), 3),
             "paint_p95_ms": round(float(np.percentile(painted, 95)), 3),
@@ -84,7 +91,10 @@ def main():
                 float(np.percentile([v for i, v in enumerate(painted) if i % 15 != 0], 95)), 3
             ),
             "map_roundtrip_p95_ms": round(float(np.percentile(map_latency, 95)), 3),
-            "display_points": {n: len(c.getData()[0]) for n, (c, _) in window.plots.curves.items()},
+            "display_points": {
+                f"{n[0] + 1}:{n[1]}": len(c.getData()[0])
+                for n, (c, _) in window.plots.curves.items()
+            },
             "curves_reused": expected_curves == [id(c) for c, _ in window.plots.curves.values()],
         }
         print(json.dumps(result), flush=True)
@@ -125,7 +135,10 @@ def main():
     timer.timeout.connect(tick)
     timer.start(300)
     QTimer.singleShot(60000, lambda: app.exit(2))
-    return app.exec()
+    result = app.exec()
+    window.settings.sync()
+    preferences.cleanup()
+    return result
 
 
 if __name__ == "__main__":

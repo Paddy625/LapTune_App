@@ -7,9 +7,10 @@ from tempfile import TemporaryDirectory
 from generate_demo import generate
 from PySide6.QtCore import QTimer
 
-from telemetry_viewer.app import create_application
+from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
 
+preferences = isolated_settings()
 app = create_application([])
 window = MainWindow()
 window.layer_combo.setCurrentText("Offline")
@@ -21,6 +22,9 @@ def capture():
     if window.session is None or window.thread is not None or not window.map_widget.is_ready:
         QTimer.singleShot(100, capture)
         return
+    if "--mixed" in sys.argv[2:]:
+        window.plots.titles[0] = "Dynamics · acceleration / rotation / speed"
+        window.channels.apply_plot_selection(0, ["ACC_X", "GYRO_Z", "GPS_SPEED_KMH"])
     window.set_cursor(len(window.session.nr) // 2)
     target = Path(sys.argv[1])
     target.parent.mkdir(parents=True, exist_ok=True)

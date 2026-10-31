@@ -5,12 +5,13 @@ from pathlib import Path
 
 import numpy as np
 from benchmark_rendering import synthetic_session
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QToolBar
 
-from telemetry_viewer.app import create_application
+from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
 
+preferences = isolated_settings()
 app = create_application([])
 window = MainWindow()
 window.layer_combo.setCurrentText("Offline")
@@ -62,14 +63,15 @@ def check():
                 window.open_action
             )
             assert not window.brand_logo.pixmap().isNull()
-            assert window.menuBar().cornerWidget(Qt.Corner.TopRightCorner) is window.brand_logo
+            assert window.brand_logo.height() == window.brand_toolbar.height()
+            assert window.brand_logo.pixmap().height() >= window.brand_toolbar.height() - 1
             for curve, plot in window.plots.curves.values():
                 assert not curve.opts["autoDownsample"]
                 assert curve.opts["downsample"] > 1
                 assert curve.opts["downsampleMethod"] == "peak"
                 assert len(curve.getData()[0]) < 4 * plot.vb.width(), "Full session was painted"
                 assert len(curve.getOriginalDataset()[0]) == len(session.nr)
-            y = window.plots.curves["ACC_X"][0].getData()[1]
+            y = window.plots.curves[(1, "ACC_X")][0].getData()[1]
             assert y.max() == 500 and y.min() == -400
             assert session.channels["ACC_X"].samples[50003] == 500
             cached = window.plots._masked_values["ACC_X"][0]

@@ -1,4 +1,5 @@
 import html
+import json
 from collections import Counter
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QProgressBar,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTextBrowser,
@@ -31,9 +33,11 @@ from PySide6.QtWidgets import (
 
 from telemetry_viewer.exporters.files import export_csv, export_gpx
 from telemetry_viewer.gui.channel_panel import ChannelPanel
+from telemetry_viewer.gui.plot_config import PlotConfigurationDialog
 from telemetry_viewer.gui.plot_panel import PlotPanel
 from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
+from telemetry_viewer.processing.display import elapsed_clock
 
 
 class ImportWorker(QObject):
@@ -78,6 +82,30 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.closing = False
         self.plots = PlotPanel()
+        self._loading_layout = False
+        try:
+            self._saved_layout = json.loads(self.settings.value("plot_layout_v2", "{}"))
+        except (TypeError, ValueError):
+            self._saved_layout = {}
+        if not isinstance(self._saved_layout, dict):
+            self._saved_layout = {}
+        if not isinstance(self._saved_layout.get("plots", []), list):
+            self._saved_layout = {}
+        for i, saved in enumerate(self._saved_layout.get("plots", [])[:4]):
+            if not isinstance(saved, dict):
+                continue
+            self.plots.titles[i] = str(saved.get("title", f"Plot {i + 1}"))[:128]
+            ranges = saved.get("ranges", {})
+            if not isinstance(ranges, dict):
+                continue
+            for unit, limits in ranges.items():
+                if (
+                    isinstance(limits, list)
+                    and len(limits) == 2
+                    and all(isinstance(v, (float, int)) and np.isfinite(v) for v in limits)
+                    and limits[0] < limits[1]
+                ):
+                    self.plots.manual_ranges[i][unit] = tuple(limits)
         self.setCentralWidget(self.plots)
         self.channels = ChannelPanel()
         self.channel_dock = QDockWidget("CHANNELS", self)
@@ -90,6 +118,8 @@ class MainWindow(QMainWindow):
         self.resizeDocks([self.channel_dock, self.map_dock], [400, 380], Qt.Orientation.Horizontal)
         self.channels.selection_updated.connect(self.refresh_plots)
         self.plots.position_changed.connect(self.on_plot_position)
+        self.plots.configure_requested.connect(self.configure_plot)
+        self.plots.layout_changed.connect(self.save_plot_layout)
         self.map_widget.location_selected.connect(self.on_map_position)
         self._build_actions()
         self.summary = QLabel("Open a logger .TXT file to begin · all processing stays local")
@@ -109,6 +139,7 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         if state:
             self.restoreState(state)
+        self.removeToolBarBreak(self.brand_toolbar)
         self.layer_combo.setCurrentText(self.settings.value("map_layer", "Road"))
 
     def _build_actions(self):
@@ -134,32 +165,14 @@ class MainWindow(QMainWindow):
         view = self.menuBar().addMenu("&View")
         view.addAction(self.channel_dock.toggleViewAction())
         view.addAction(self.map_dock.toggleViewAction())
-        view.addAction("Fit all", self.plots.fit_all, "Ctrl+0")
+        view.addAction("Fit X to session", self.plots.fit_all, "Ctrl+0")
         session_menu = self.menuBar().addMenu("&Session")
         session_menu.addAction("Metadata and map provider…", self.configure)
         session_menu.addAction("Data quality and distance report…", self.show_quality)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("Controls and privacy", self.show_help)
-        self.brand_logo = QLabel()
-        self.brand_logo.setObjectName("laptune_brand")
-        self.brand_logo.setAccessibleName("LapTune")
-        self.brand_logo.setToolTip("LapTune · Telemetry Viewer")
-        logo = QPixmap(str(Path(__file__).parent / "assets" / "laptune-logo.png"))
-        # Display the supplied wide wordmark without its large exterior canvas margins.
-        logo = logo.copy(105, 164, 1958, 392)
-        self.brand_logo.setPixmap(
-            logo.scaled(
-                180,
-                36,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-        self.brand_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.brand_logo.setFixedSize(194, 42)
-        self.brand_logo.setStyleSheet("background: #000; border-radius: 4px; margin: 2px 5px;")
-        self.menuBar().setCornerWidget(self.brand_logo, Qt.Corner.TopRightCorner)
         toolbar = QToolBar("Analysis")
+        self.analysis_toolbar = toolbar
         toolbar.setObjectName("analysis")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
@@ -180,12 +193,8 @@ class MainWindow(QMainWindow):
         self.distance_combo.setToolTip("Distance method; compare totals in Session > Data quality")
         self.distance_combo.currentIndexChanged.connect(self.distance_changed)
         toolbar.addWidget(self.distance_combo)
-        self.time_format = QComboBox()
-        self.time_format.addItems(["Seconds", "mm:ss.sss"])
-        self.time_format.currentIndexChanged.connect(self.refresh_plots)
-        toolbar.addWidget(self.time_format)
-        toolbar.addAction("Fit all", self.plots.fit_all)
-        toolbar.addAction("Reset zoom", self.plots.fit_all)
+        toolbar.addAction("Fit X", self.plots.fit_all)
+        toolbar.addAction("Reset X zoom", self.plots.fit_all)
         self.count_combo = QComboBox()
         self.count_combo.addItems(["1 plot", "2 plots", "3 plots", "4 plots"])
         self.count_combo.setCurrentIndex(2)
@@ -203,6 +212,39 @@ class MainWindow(QMainWindow):
         export.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(export)
         toolbar.addAction("Quality report", self.show_quality)
+        # A dedicated toolbar keeps branding visible even when analysis controls overflow.
+        self.brand_toolbar = QToolBar("LapTune")
+        self.brand_toolbar.setObjectName("branding")
+        self.brand_toolbar.setMovable(False)
+        self.brand_toolbar.setFloatable(False)
+        self.brand_toolbar.setMinimumWidth(310)
+        self.brand_toolbar.setFixedHeight(60)
+        self.brand_toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.brand_toolbar.setStyleSheet(
+            "QToolBar {padding:0; margin:0; border:0; background:#172330;}"
+        )
+        self.brand_logo = QLabel()
+        self.brand_logo.setObjectName("laptune_brand")
+        self.brand_logo.setAccessibleName("LapTune")
+        self.brand_logo.setToolTip("LapTune · Telemetry Viewer")
+        logo = QPixmap(str(Path(__file__).parent / "assets" / "laptune-logo.png"))
+        logo = logo.copy(113, 172, 1943, 377)
+        self.brand_logo.setPixmap(
+            logo.scaled(
+                310,
+                60,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self.brand_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.brand_logo.setFixedSize(310, 60)
+        self.brand_logo.setStyleSheet("background:#000; padding:0; margin:0; border:0;")
+        brand_spacer = QLabel()
+        brand_spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.brand_toolbar.addWidget(brand_spacer)
+        self.brand_toolbar.addWidget(self.brand_logo)
+        self.addToolBar(self.brand_toolbar)
 
     def _refresh_recent(self):
         self.recent_menu.clear()
@@ -274,7 +316,19 @@ class MainWindow(QMainWindow):
         self.distance_combo.blockSignals(True)
         self.distance_combo.setCurrentIndex(0 if session.distance_speed_m is not None else 1)
         self.distance_combo.blockSignals(False)
-        self.channels.populate(session)
+        saved_plots = self._saved_layout.get("plots", [])
+        assignments = None
+        if saved_plots:
+            assignments = [
+                p.get("channels", [])
+                if isinstance(p, dict) and isinstance(p.get("channels", []), list)
+                else []
+                for p in saved_plots[:4]
+            ]
+            assignments += [[] for _ in range(4 - len(assignments))]
+        self._loading_layout = True
+        self.channels.populate(session, assignments)
+        self._loading_layout = False
         self.map_widget.set_session(session)
         self.plots.fit_all()
         self.set_cursor(0)
@@ -308,10 +362,47 @@ class MainWindow(QMainWindow):
         required = max([panel + 1 for _, panel, _ in selection], default=1)
         if self.count_combo.currentIndex() + 1 < required:
             self.count_combo.setCurrentIndex(required - 1)
-        self.plots.set_selection(
-            self.session, selection, self.axis_mode, self.time_format.currentIndex() == 1
-        )
+        self.plots.set_selection(self.session, selection, self.axis_mode)
         self.set_cursor(self.cursor_sample)
+        self.save_plot_layout()
+
+    def configure_plot(self, panel, tab=0):
+        if self.session is None:
+            QMessageBox.information(self, "Open data first", "Open a logger file or folder first.")
+            return
+        names = [name for name, p, _color in self.channels.selection() if p == panel]
+        dialog = PlotConfigurationDialog(
+            self.session,
+            panel,
+            names,
+            self.plots.titles[panel],
+            self.plots.y_ranges[panel],
+            self,
+            tab=tab,
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.plots.titles[panel] = dialog.title_edit.text().strip()[:128] or f"Plot {panel + 1}"
+            # Record ranges first so adding a channel cannot overwrite the chosen limits.
+            self.plots.manual_ranges[panel].update(dialog.ranges())
+            self.channels.apply_plot_selection(panel, dialog.selected_names())
+            self.plots.set_y_ranges(panel, dialog.ranges())
+            self.save_plot_layout()
+
+    def save_plot_layout(self):
+        if self.session is None or self._loading_layout:
+            return
+        selection = self.channels.selection()
+        self._saved_layout = {
+            "plots": [
+                {
+                    "title": self.plots.titles[p],
+                    "channels": [name for name, panel, _ in selection if panel == p],
+                    "ranges": self.plots.manual_ranges[p],
+                }
+                for p in range(4)
+            ]
+        }
+        self.settings.setValue("plot_layout_v2", json.dumps(self._saved_layout))
 
     @property
     def axis_mode(self):
@@ -358,7 +449,8 @@ class MainWindow(QMainWindow):
         self.channels.set_cursor(i)
         self.map_widget.set_cursor(i)
         self.cursor_label.setText(
-            f"Row {i:,} · NR {s.nr[i]} · {s.elapsed_time_s[i]:.3f} s · {s.distance_m[i]:.1f} m"
+            f"Row {i:,} · NR {s.nr[i]} · {elapsed_clock(s.elapsed_time_s[i], True)} "
+            f"· {s.distance_m[i]:.1f} m"
         )
         source = s.source_for_sample(i)
         if source is not None:
@@ -443,8 +535,12 @@ class MainWindow(QMainWindow):
             if self.session:
                 self.session.metadata.timezone = tz
                 self.session.metadata.orientation = fields["orientation"].text()
+                assignments = [
+                    [name for name, panel, _ in self.channels.selection() if panel == p]
+                    for p in range(4)
+                ]
                 self.apply_units(fields["acc_unit"].text(), fields["gyro_unit"].text())
-                self.channels.populate(self.session)
+                self.channels.populate(self.session, assignments)
             self.layer_changed(self.layer_combo.currentText())
             dialog.accept()
 
@@ -499,7 +595,7 @@ class MainWindow(QMainWindow):
     def export(self, kind):
         if self.session is None:
             return
-        names = [name for name, _, _ in self.channels.selection()]
+        names = list(dict.fromkeys(name for name, _, _ in self.channels.selection()))
         if kind == "csv" and not names:
             QMessageBox.information(
                 self, "Select channels", "Select at least one channel to export."
@@ -545,10 +641,15 @@ class MainWindow(QMainWindow):
             "Controls and privacy",
             "Ctrl+O opens a file; Ctrl+Shift+O opens a folder of TXT logs "
             "in numeric filename order. "
-            "Drop a file or folder to import. Wheel: zoom; drag: pan; "
-            "right-drag: rectangle zoom; Ctrl+0: fit all. Hover/click plots "
+            "Drop a file or folder to import. Wheel and dragging change X only; "
+            "Ctrl+0 fits the X axis. Use Configure plot… / Y-axis ranges… to change Y limits. "
+            "Hover/click plots "
             "to move cursor. Click the map to select the nearest GPS change; "
             "repeated passages prefer the active time.\n\n"
+            "Configure plot… selects any channels, title and per-unit Y ranges. "
+            "A channel can appear in several plots; the Channels panel's assignment menu "
+            "also selects multiple plots. Each distinct unit gets its own Y scale. "
+            "Time ticks use hh:mm:ss. Layouts and Y limits are saved locally. "
             "Channel context menu: solo/hide all. Panels share X range. "
             "Distance plateaus preserve the active time where possible.\n\n"
             "Logs remain local. Online maps request tiles around the route, "

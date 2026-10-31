@@ -8,9 +8,10 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QTimer
 
-from telemetry_viewer.app import create_application
+from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
 
+preferences = isolated_settings()
 app = create_application([])
 window = MainWindow()
 window.layer_combo.setCurrentText("Offline")

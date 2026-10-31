@@ -1,8 +1,9 @@
 import argparse
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QSettings, QTimer
 from PySide6.QtGui import QPixmapCache
 from PySide6.QtWidgets import QApplication
 
@@ -49,6 +50,14 @@ def create_application(argv=None):
     return app
 
 
+def isolated_settings():
+    """Keep diagnostic GUI runs out of the user's saved layouts, including Windows registry."""
+    directory = TemporaryDirectory(prefix="laptune-gui-settings-")
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, directory.name)
+    return directory
+
+
 def main():
     parser = argparse.ArgumentParser(description="Local IMU/GPS telemetry analysis")
     parser.add_argument("file", nargs="?", type=Path, help="Logger TXT file or folder of TXT logs")
@@ -60,6 +69,7 @@ def main():
     )
     parser.add_argument("--smoke-result", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    preferences = isolated_settings() if args.smoke_test else None
     app = create_application()
     window = MainWindow()
     window.show()
@@ -71,4 +81,8 @@ def main():
         window.open_later(args.file)
     # Keep references alive through Qt's event loop.
     QTimer.singleShot(0, lambda: None)
-    return app.exec()
+    result = app.exec()
+    if preferences is not None:
+        window.settings.sync()
+        preferences.cleanup()
+    return result

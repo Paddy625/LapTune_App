@@ -10,7 +10,7 @@ The viewer now:
 - Sets peak min/max reduction at the panel level and adapts the factor to the **actual count**
   of visible source samples and viewport width. It does not assume uniformly spaced time or
   distance. Zooming into a short interval restores the original measurement detail.
-- Clips curves to the view, uses thin cosmetic pens, caches rasterized axes and keeps Qt's
+- Clips curves to the view, uses thin cosmetic pens, caches rasterized time axes/grid and keeps Qt's
   pixmap cache at least 64 MiB to avoid cache eviction on HiDPI screens.
 - Reuses source arrays when valid, caches masked values across selection/axis changes, and
   uses one shared 30 Hz mouse proxy. Cursor readout and export use full-resolution channels.
@@ -53,3 +53,19 @@ documented in validation.md. Automated GUI regression tests enforce a bounded di
 count, preservation of narrow spikes and original arrays, correct reduction with a long timestamp
 gap, distinct map renderers, zero route redraws on marker movement, action ordering and a valid
 logo asset. They avoid unreliable wall-clock performance thresholds in CI.
+
+
+## Configurable mixed-unit plots
+
+Per-unit ViewBoxes reuse the same source arrays and adapt their reduced point counts to the
+shared viewport. Y limits stay fixed, so X gestures never trigger repeated Y auto-ranging.
+Vertical axis labels use vector pictures to avoid Qt's multi-axis item-cache clipping, while
+horizontal grid lines have their own cached item. The full-height logo remains separate from
+the plot scene.
+
+`docs/benchmarks/mixed-axis-rendering.json` records a 186,400-sample, 90-frame check with ACC_X,
+GYRO_Z and speed together in plot 1 and the default ACC/gyro plots below (six series total).
+p95 steady repaint is 5.567 ms; including deliberate pan/zoom frames it is 23.289 ms. These
+measurements use the same headless host methodology, with constructed data rather than disk I/O.
+Reproduce with `tools/benchmark_rendering.py --samples 186400 --frames 90 --mixed`. The benchmark
+uses temporary settings so it does not overwrite the user's saved plot layout.

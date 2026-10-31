@@ -49,7 +49,8 @@ server is required for folder discovery, concatenation or numeric filename order
 Rendering reduction is configured on PlotItem because adding a PlotDataItem overrides its
 constructor's downsampling options. The factor is recalculated from binary-searched visible
 sample counts, so nonuniform time, gaps and distance plateaus do not rely on a global mean rate.
-Axes use DeviceCoordinateCache; the application keeps Qt's pixmap cache at least 64 MiB.
+Time axes and grid items use raster caches; vertical-axis vector labels remain unclipped.
+The application keeps Qt's pixmap cache at least 64 MiB.
 Masked source values are cached for the current session and cleared when another session loads.
 Shared channel timelines reuse the source distance array; independent timelines still map by time.
 
@@ -59,5 +60,32 @@ from the rendered route and isolates its Canvas renderer from the marker's SVG r
 See performance.md for measurements and the scope of the synthetic million-sample check.
 
 The toolbar places folder import before single-file import. A prepared adaptation of the
-user-supplied LapTune wordmark appears in the menu bar's top-right corner. Its PNG is included
+user-supplied LapTune wordmark fills the toolbar height at its right edge. Its PNG is included
 in wheel package data and the PyInstaller spec; source and frozen GUI smoke checks require it.
+
+
+## Per-plot configuration and unit scales
+
+Each plotted series is keyed by `(panel_index, channel_name)`, so a measurement may appear in
+multiple panels while sharing its source arrays and cached validity mask. Channels with the
+same unit share a ViewBox; each additional unit gets an independent linked ViewBox and a colored
+right-hand AxisItem. All share X geometry/ranges and cursor positions. Additional right-axis
+columns are reserved equally across visible panels. Unknown units use channel-specific groups.
+
+XOnlyViewBox directs wheel/drag gestures, including gestures over auxiliary layers, to X only.
+All Y auto-range flags are disabled; PlotItem's native auto-range buttons/menus are replaced by
+explicit per-plot options. Initial/new-unit ranges come from full-resolution valid data. Existing
+ranges stay fixed across X zoom/pan, channel toggles, fits and time/distance switching. The dialog
+or the explicit Fit Y action is the only way to revise an existing range.
+
+AxisItem's Qt item cache can clip sibling Y labels with auxiliary ViewBoxes. Vertical axes are
+painted directly from their cached vector pictures; a separate cached GridItem draws horizontal
+lines. Time-axis pictures are rasterized after measuring tick geometry on the live viewport,
+with enough margin for hh:mm:ss labels. This preserves readability and avoids replaying the
+entire grid on cursor movement. The synthetic mixed-axis benchmark is recorded in benchmarks/.
+
+PlotConfigurationDialog edits titles, channel selection and per-unit bounds atomically. The
+Channels panel has multi-plot assignment menus. QSettings key plot_layout_v2 stores titles,
+channel names and explicit bounds, never measurement arrays. Metadata changes preserve those
+assignments. CSV export deduplicates selected channel names across plots. The pure processing
+helpers display.py and scales.py format elapsed durations and calculate valid data ranges.

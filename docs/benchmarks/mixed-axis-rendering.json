@@ -1,0 +1,20 @@
+{
+  "samples": 186400,
+  "files": 10,
+  "frames": 90,
+  "mixed_units": true,
+  "gui_setup_s": 0.052,
+  "cursor_p95_ms": 0.773,
+  "paint_p95_ms": 23.289,
+  "steady_paint_p95_ms": 5.567,
+  "map_roundtrip_p95_ms": 3.11,
+  "display_points": {
+    "1:ACC_X": 772,
+    "2:ACC_X": 772,
+    "2:ACC_Y": 772,
+    "1:GYRO_Z": 772,
+    "3:GYRO_Z": 772,
+    "1:GPS_SPEED_KMH": 772
+  },
+  "curves_reused": true
+}

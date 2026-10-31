@@ -13,9 +13,11 @@ No backend service; raw logs stay on your computer.
   acquisition order, raw date/time and point-corrected monotonic display time.
 - Generic numeric channels, individual channel time arrays, validity and source metadata.
   No fixed IMU/GPS refresh frequency is assumed. An unknown numeric column appears automatically.
-- Folder-first toolbar, LapTune branding and up to four linked PyQtGraph panels,
+- Folder-first toolbar, a full-height LapTune wordmark and up to four linked PyQtGraph panels,
   channel checkboxes/panel assignment, solo mode,
-  nearest recorded value readout, shared cursor, wheel/pan/rectangle zoom and fit all.
+  nearest recorded value readout, shared cursor and X-only wheel zoom/pan.
+- Per-plot channel/range editor, independent Y axes for each unit, duplicate channel assignments
+  across plots and locally saved layouts. Time ticks use elapsed `hh:mm:ss`.
 - Time or distance axes without reimporting. Compare speed-integrated and GPS-geodesic distance.
 - Bundled Leaflet 1.9.4 with Qt WebChannel, route/marker, map-to-plot selection and offline mode.
   Optional licensed satellite tile template; no provider key is required for Road or Offline.
@@ -117,10 +119,12 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 
 ## Controls and data interpretation
 
-- Channels: checkbox to show; Panel selector chooses plot 1–4; right-click to solo/hide all.
+- Channels: checkbox to show; the Panel menu selects one or several plots (1–4); right-click
+  to solo/hide all. A channel can be displayed in several plots without duplicating CSV columns.
 - **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
-  is at the top right.
-- Wheel to zoom, drag to pan, right-drag to rectangle zoom, Ctrl+0/Fit all to reset.
+  fills the height of the toolbar at its right edge.
+- Wheel to zoom X, drag to pan X, right-drag to scale X. Ctrl+0 / **Fit X** / **Reset X zoom**
+  reset only X. Y is fixed until explicitly changed through a plot's options.
   Visible peak/min-max reduction adapts to viewport width and actual sample density; source
   data, cursor values and exports retain their full resolution.
 - Hover/click a plot to move the common cursor. Click the map to choose the geographically
@@ -132,6 +136,31 @@ This is a portable **onedir** build, not a standalone onefile EXE.
   deg/s labels are assumptions. Raw times remain naive; UTC is never assumed.
 - Quality report shows every issue with its physical file line, correction counts, GPS change
   count and the two distance totals. Row density is not the physical refresh rate of each sensor.
+
+### Configure each plot
+
+Every plot has a **Configure plot…** button. Select any available channels in the **Channels**
+tab, optionally change the plot title, then use **Y-axis ranges** to edit a separate minimum and
+maximum for each unit. **Fit to data** fills that unit's limits from full-resolution valid
+measurements. Confirm with **OK**; **Cancel** leaves the plot unchanged.
+
+For example, select `ACC_X`, `GYRO_Z` and `GPS_SPEED_KMH` together. The plot shows a left-hand
+acceleration axis and independent right-hand gyro and speed axes, with colored ticks/labels.
+Signals sharing a unit share its Y scale. Unknown units are kept on separate scales rather than
+silently mixing unrelated measurements. Right-axis space is aligned across visible plots so the
+linked X positions still match.
+
+The arrow beside **Configure plot…**, or right-click inside a plot, opens its options. Choose
+**Y-axis ranges…** for manual limits or **Fit Y to all data** for an explicit refit of that plot
+only. Scrolling, dragging, fitting X, switching Time/Distance and toggling existing channels do
+not change existing Y ranges. A new unit/session initializes its scale from valid data unless
+you have saved explicit limits. Adding a wider signal to an existing unit may therefore require
+an explicit **Fit Y to all data**.
+
+Titles, channel assignments and explicit Y ranges persist locally in QSettings. Time ticks
+start at `00:00:00` and do not wrap after 24 hours; cursor readout retains milliseconds.
+
+![Real mixed-unit plot with synthetic signals and independent Y axes](docs/mixed-units.png)
 
 See [data format and processing](docs/data-format.md), [architecture](docs/architecture.md)
 and [rendering performance measurements](docs/performance.md).
