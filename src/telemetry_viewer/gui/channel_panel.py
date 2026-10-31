@@ -1,5 +1,5 @@
 import numpy as np
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -20,7 +20,10 @@ class ChannelPanel(QTreeWidget):
         super().__init__(parent)
         self.setHeaderLabels(["Channel / unit", "Panel", "Value"])
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        self.setColumnWidth(0, 245)
+        self.setColumnWidth(2, 75)
+        self.header().setMinimumSectionSize(55)
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.items = {}
         self.session = None
@@ -39,6 +42,7 @@ class ChannelPanel(QTreeWidget):
             if channel.group not in groups:
                 groups[channel.group] = QTreeWidgetItem(self, [channel.group])
             item = QTreeWidgetItem(groups[channel.group], [f"{name} [{channel.unit}]", "", "—"])
+            item.setSizeHint(0, QSize(0, 34))
             item.setData(0, Qt.ItemDataRole.UserRole, name)
             item.setCheckState(
                 0,

@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "Telemetry Viewer",
+    "type": "debugpy",
+    "request": "launch",
+    "module": "telemetry_viewer",
+    "cwd": "${workspaceFolder}",
+    "justMyCode": true
+  }]
+}

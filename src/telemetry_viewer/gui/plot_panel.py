@@ -33,6 +33,7 @@ class PlotPanel(QWidget):
             plot = self.graphics.addPlot(row=i, col=0, axisItems={"bottom": axis})
             plot.showGrid(x=True, y=True, alpha=0.12)
             plot.setLabel("left", f"Panel {i + 1}")
+            plot.getAxis("left").enableAutoSIPrefix(False)
             plot.addLegend(offset=(10, 5), labelTextColor="#d5e1ef")
             plot.setMouseEnabled(x=True, y=True)
             plot.setClipToView(True)
@@ -84,6 +85,10 @@ class PlotPanel(QWidget):
                 "Elapsed time" if mode == "time" else "Distance",
                 units="s" if mode == "time" else "m",
             )
+        for panel, plot in enumerate(self.plots):
+            units = {session.channels[n].unit for n, p, _ in selection if p == panel}
+            label = next(iter(units)) if len(units) == 1 else "mixed units"
+            plot.setLabel("left", f"Panel {panel + 1} · {label}")
         for name, panel, color in selection:
             channel = session.channels[name]
             y = np.where(channel.valid, channel.samples, np.nan)

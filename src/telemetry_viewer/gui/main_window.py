@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
         self.map_dock = QDockWidget("GPS ROUTE · nearest recorded fix", self)
         self.map_dock.setWidget(self.map_widget)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.map_dock)
-        self.resizeDocks([self.channel_dock, self.map_dock], [310, 430], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.channel_dock, self.map_dock], [400, 380], Qt.Orientation.Horizontal)
         self.channels.selection_updated.connect(self.refresh_plots)
         self.plots.position_changed.connect(self.on_plot_position)
         self.map_widget.location_selected.connect(self.on_map_position)
