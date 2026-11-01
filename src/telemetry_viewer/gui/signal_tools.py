@@ -37,13 +37,14 @@ def number(value, low=-1e12, high=1e12):
 
 
 class SignalToolsDialog(QDialog):
-    def __init__(self, session, parent=None, source=""):
+    def __init__(self, session, parent=None, source="", mode="time", bounds=None):
         super().__init__(parent)
         self.session = session
+        self.mode, self.bounds = mode, bounds
         self.setWindowTitle("Signal tools · calculated channels")
         self.resize(740, 660)
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        self.form = form = QFormLayout()
         self.operation = QComboBox()
         for key, label in OPERATIONS.items():
             self.operation.addItem(label, key)
@@ -74,7 +75,15 @@ class SignalToolsDialog(QDialog):
         form.addRow("Reset state after a gap longer than", self.max_gap)
         self.gain, self.offset = number(1), number(0)
         form.addRow("Gain", self.gain)
-        form.addRow("Offset (in output units)", self.offset)
+        self.dc_mode = QComboBox()
+        self.dc_mode.addItem("Manual signed offset", "manual")
+        self.dc_mode.addItem("Subtract mean · entire session", "session")
+        self.dc_mode.addItem("Subtract mean · visible X range", "visible")
+        form.addRow("DC component", self.dc_mode)
+        form.addRow("Offset (+ adds, − subtracts)", self.offset)
+        self.dc_info = QLabel()
+        self.dc_info.setWordWrap(True)
+        form.addRow(self.dc_info)
         self.unit = QComboBox()
         self.unit.setEditable(True)
         self.unit.addItems(list(UNIT_FACTORS))
@@ -102,6 +111,7 @@ class SignalToolsDialog(QDialog):
         self._auto_name = ""
         self.operation.currentIndexChanged.connect(self.update_fields)
         self.sources[0].currentIndexChanged.connect(self.update_fields)
+        self.dc_mode.currentIndexChanged.connect(self.update_dc_info)
         self.update_fields()
 
     def update_fields(self, *_):
@@ -109,12 +119,17 @@ class SignalToolsDialog(QDialog):
         source = self.session.channels[self.sources[0].currentData()]
         self.sources[1].setEnabled(operation in ("magnitude", "difference"))
         self.sources[2].setEnabled(operation == "magnitude")
+        self.form.setRowVisible(self.sources[1], operation in ("magnitude", "difference"))
+        self.form.setRowVisible(self.sources[2], operation == "magnitude")
+        self.form.setRowVisible(self.dc_mode, operation == "scale")
+        self.form.setRowVisible(self.dc_info, operation == "scale")
         filtering = operation in ("lowpass", "highpass")
         self.cutoff.setEnabled(filtering)
         self.zero_phase.setEnabled(filtering)
         self.max_gap.setEnabled(filtering or operation in ("derivative", "integral"))
         self.gain.setEnabled(operation == "scale")
         self.offset.setEnabled(operation == "scale")
+        self.dc_mode.setEnabled(operation == "scale")
         self.unit.setEnabled(operation in ("convert", "scale"))
         base = normalized_unit(source.unit)
         defaults = {
@@ -140,6 +155,24 @@ class SignalToolsDialog(QDialog):
                 suffix += 1
             self._auto_name = candidate
             self.name.setText(candidate)
+        self.update_dc_info()
+
+    def update_dc_info(self, *_):
+        if self.dc_mode.currentData() == "manual":
+            text = (
+                "Result = gain × source + offset (offset is in output units).\n"
+                "Example: −0.2 subtracts a constant 0.2; +0.2 adds it."
+            )
+        else:
+            scope = (
+                "entire session" if self.dc_mode.currentData() == "session" else "visible X range"
+            )
+            text = (
+                "Result = gain × (source − mean) + offset.\n"
+                f"Mean: valid samples in the {scope}; one constant shifts the entire signal.\n"
+                "Use a known zero-load section as reference when preserving sustained loads."
+            )
+        self.dc_info.setText(text)
 
     def recipe(self):
         operation = self.operation.currentData()
@@ -148,6 +181,18 @@ class SignalToolsDialog(QDialog):
             sources.append(self.sources[1].currentData())
         if operation == "magnitude" and self.sources[2].currentData():
             sources.append(self.sources[2].currentData())
+        remove_mean = operation == "scale" and self.dc_mode.currentData() != "manual"
+        mean_time_range = None
+        if remove_mean and self.dc_mode.currentData() == "visible":
+            if self.bounds is None:
+                raise ValueError("A visible plot range is required for DC calibration.")
+            channel = self.session.channels[sources[0]]
+            axis = self.session.channel_axis(channel, self.mode)
+            lo = int(np.searchsorted(axis, self.bounds[0], side="left"))
+            hi = int(np.searchsorted(axis, self.bounds[1], side="right"))
+            if lo >= hi:
+                raise ValueError("The visible X range contains no samples for this channel.")
+            mean_time_range = (float(channel.time_s[lo]), float(channel.time_s[hi - 1]))
         return SignalRecipe(
             self.name.text().strip(),
             operation,
@@ -158,6 +203,8 @@ class SignalToolsDialog(QDialog):
             self.cutoff.value(),
             self.zero_phase.isChecked(),
             self.max_gap.value(),
+            remove_mean,
+            mean_time_range,
         )
 
     def _accept(self):

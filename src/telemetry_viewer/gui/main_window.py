@@ -469,7 +469,11 @@ class MainWindow(QMainWindow):
         if self.thread is not None or self.calculation_thread is not None:
             return
         dialog = SignalToolsDialog(
-            self.session, self, source=source if isinstance(source, str) else ""
+            self.session,
+            self,
+            source=source if isinstance(source, str) else "",
+            mode=self.axis_mode,
+            bounds=tuple(self.plots.plots[0].vb.viewRange()[0]),
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.start_calculation(dialog.recipe())

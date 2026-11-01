@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **64 passed**, including the optional private-log integration test.
+- `pytest -q`: **71 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -78,3 +78,10 @@ Calculated tree category, choosing a filtered channel in a plot, statistics, rem
 assignment column and persistence of 1/2/4 visible plots without automatic expansion. Real
 Leaflet checks verify start/end rows in Time/Distance modes, fixed-size marker bars, a separate
 renderer and zero static-route redraws on plot-range changes. Out-of-session bounds clear marks.
+
+DC alignment checks cover positive/negative constants, invalid samples, empty/invalid reference
+ranges, gain plus signed residual offset, unchanged source arrays, and CSV baseline provenance.
+The desktop/small-window GUI checks verify hidden Source B/C fields and labels for all unary
+operations, the correct B/C rows for difference/vector operations, and a real background DC
+calculation calibrated from the viewport. Time and Distance views select the same reference
+interval, and two visible plots remain selected after publication of the centered channel.

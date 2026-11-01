@@ -334,6 +334,27 @@ def check():
             assert window.plots.plots[1].isVisible() and not window.plots.plots[2].isVisible()
             state["raw_before"] = session.channels["ACC_X"].samples.copy()
             tools = SignalToolsDialog(session, window, source="ACC_X")
+            # Hide the whole source row, including its label, for unary operations.
+            for operation in (
+                "magnitude",
+                "difference",
+                "scale",
+                "convert",
+                "derivative",
+                "integral",
+                "highpass",
+                "lowpass",
+            ):
+                tools.operation.setCurrentIndex(tools.operation.findData(operation))
+                for index, visible in (
+                    (1, operation in ("magnitude", "difference")),
+                    (2, operation == "magnitude"),
+                ):
+                    assert tools.form.isRowVisible(tools.sources[index]) == visible
+                    assert tools.sources[index].isEnabled() == visible
+                    assert tools.form.labelForField(tools.sources[index]).isHidden() != visible
+                if operation not in ("magnitude", "difference"):
+                    assert tools.recipe().sources == ("ACC_X",)
             tools.cutoff.setValue(3)
             tools.name.setText("CALC_ACC_FILTERED")
             QTimer.singleShot(20, tools._accept)
@@ -366,6 +387,43 @@ def check():
             QTimer.singleShot(20, stats.accept)
             with patch("telemetry_viewer.gui.main_window.StatisticsDialog", return_value=stats):
                 window.statistics_action.trigger()
+            window.plots.plots[0].setXRange(3, 5, padding=0)
+
+            def center_dialog(*args, **kwargs):
+                dialog = SignalToolsDialog(*args, **kwargs)
+                assert dialog.mode == "time"
+                np.testing.assert_allclose(dialog.bounds, (3, 5))
+                dialog.operation.setCurrentIndex(dialog.operation.findData("scale"))
+                dialog.dc_mode.setCurrentIndex(dialog.dc_mode.findData("visible"))
+                dialog.name.setText("CALC_DC_ZERO")
+                QTimer.singleShot(20, dialog._accept)
+                return dialog
+
+            with patch(
+                "telemetry_viewer.gui.main_window.SignalToolsDialog", side_effect=center_dialog
+            ):
+                window.signal_tools_action.trigger()
+            state["phase"] = "centered"
+        elif phase == "centered":
+            if window.calculation_thread is not None:
+                return
+            centered = session.channels["CALC_DC_ZERO"]
+            baseline = state["raw_before"][300:501].mean()
+            np.testing.assert_allclose(centered.samples, state["raw_before"] - baseline, atol=1e-14)
+            assert abs(centered.samples[300:501].mean()) < 1e-14
+            assert centered.calculation["mean_time_range_s"] == (3, 5)
+            assert centered.calculation["removed_mean"] == baseline
+            assert window.count_combo.currentIndex() == 1
+            window.channels.apply_plot_selection(1, [centered.name])
+            assert (1, centered.name) in window.plots.curves
+            # A distance viewport calibrates the same source-time interval.
+            distance_dialog = SignalToolsDialog(
+                session, window, source="ACC_X", mode="distance", bounds=(36, 60)
+            )
+            distance_dialog.operation.setCurrentIndex(distance_dialog.operation.findData("scale"))
+            distance_dialog.dc_mode.setCurrentIndex(distance_dialog.dc_mode.findData("visible"))
+            assert distance_dialog.recipe().mean_time_range_s == (3, 5)
+            distance_dialog.close()
             # Verify independent range rendering in the real offline Leaflet page.
             window.map_widget.page.runJavaScript(
                 "routeRenderer.rangeTestRedraws=0;"

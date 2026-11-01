@@ -105,6 +105,13 @@ Derivatives/integrals use actual dt, and integrals restart at segment boundaries
 worker performs computation; publication happens on the GUI thread, preserving assignments,
 panel count and raw arrays. Statistics use source/calculated arrays, never rendered data.
 
+Gain/offset recipes can subtract the mean of all valid input samples or a reference interval.
+The UI translates visible X bounds to the source's actual time interval, including distance
+plateaus. The worker applies `gain * (source - reference_mean) + offset` to the whole channel;
+`removed_mean` and `mean_time_range_s` make CSV provenance reproducible. Unary operations hide
+both the unused source widgets and their form labels, while multi-source selections are retained
+for switching back to vector/difference operations.
+
 RouteRange precomputes distinct vertices and segment-aware tangent neighbors. Binary searches
 snap X viewport endpoints to accepted temporal GPS fixes; plateau edges choose first/last
 instants, and GPS gaps do not create invented route segments. A 30 ms timer coalesces X-range

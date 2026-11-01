@@ -72,6 +72,40 @@ def test_gain_offset_and_incompatible_units():
         calculate(channel([1, 2]), "convert", unit="km/h")
 
 
+@pytest.mark.parametrize("offset", [-0.3, 0.3])
+def test_zero_mean_ignores_invalid_samples_and_allows_signed_output_offset(offset):
+    source = channel([2.1, 1.9, np.nan, 2])
+    original = source.samples.copy()
+    result = calculate(source, "scale", remove_mean=True, gain=2, offset=offset)
+    np.testing.assert_allclose(
+        result.samples[result.valid], [0.2 + offset, -0.2 + offset, offset], atol=1e-14
+    )
+    assert result.samples[result.valid].mean() == pytest.approx(offset)
+    assert result.calculation["removed_mean"] == pytest.approx(2)
+    np.testing.assert_array_equal(result.valid, source.valid)
+    np.testing.assert_array_equal(source.samples, original)
+
+
+def test_dc_reference_shifts_entire_signal_by_one_constant():
+    source = channel([5, 5.2, np.nan, 14, 15], [0, 0.1, 0.2, 0.3, 0.4])
+    result = calculate(source, "scale", remove_mean=True, mean_time_range_s=(0, 0.1))
+    np.testing.assert_allclose(result.samples, [-0.1, 0.1, np.nan, 8.9, 9.9], atol=1e-14)
+    np.testing.assert_allclose(result.samples[result.valid] - source.samples[source.valid], -5.1)
+    assert result.calculation["mean_time_range_s"] == (0, 0.1)
+
+
+def test_negative_dc_is_removed_by_adding_the_opposite_constant():
+    result = calculate(channel([-3, -1]), "scale", remove_mean=True)
+    np.testing.assert_allclose(result.samples, [-1, 1])
+    assert result.calculation["removed_mean"] == -2
+
+
+@pytest.mark.parametrize("bounds", [(2, 3), (float("nan"), 3), (1, 0)])
+def test_empty_or_invalid_dc_reference_is_rejected(bounds):
+    with pytest.raises(ValueError, match="DC reference"):
+        calculate(channel([1, 2]), "scale", remove_mean=True, mean_time_range_s=bounds)
+
+
 def test_vector_magnitude_aligns_only_exact_shared_measurements():
     a = channel([3, 30, 3], [0, 0.1, 0.2], name="A")
     b = channel([4, 40, 4], [0, 0.15, 0.2], name="B")
@@ -125,12 +159,19 @@ def test_calculated_csv_export_retains_processing_parameters(log_file, tmp_path)
     session = LegacyTxtImporter().load(log_file)
     recipe = SignalRecipe("CALC_ACC", "lowpass", ("ACC_X",), cutoff_hz=3)
     session.channels[recipe.name] = calculate_signal(session.channels, recipe)
+    centered = SignalRecipe(
+        "CALC_ZERO", "scale", ("ACC_X",), remove_mean=True, mean_time_range_s=(1, 2)
+    )
+    session.channels[centered.name] = calculate_signal(session.channels, centered)
     target = tmp_path / "calculated.csv"
-    export_csv(session, target, [recipe.name])
+    export_csv(session, target, [recipe.name, centered.name])
     with target.open() as handle:
         rows = list(csv.reader(handle))
-    assert rows[0][-1] == "CALC_ACC [g (assumed)]"
+    assert rows[0][-2:] == ["CALC_ACC [g (assumed)]", "CALC_ZERO [g (assumed)]"]
     assert len(rows) == len(session.nr) + 1
     metadata = json.loads(target.with_suffix(".csv.metadata.json").read_text())
     parameters = metadata["channels"][recipe.name]["calculation"]
     assert parameters["cutoff_hz"] == 3 and parameters["sources"] == ["ACC_X"]
+    baseline = metadata["channels"][centered.name]["calculation"]
+    assert baseline["removed_mean"] == pytest.approx(0.1)
+    assert baseline["mean_time_range_s"] == [1, 2]

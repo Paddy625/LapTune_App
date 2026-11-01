@@ -177,6 +177,14 @@ Available operations are RC low-pass/high-pass, gain plus offset, unit conversio
 time derivative and trapezoidal time integral. Confirm source units before conversion;
 the default acceleration/gyro labels are assumptions, not calibration.
 
+For zero alignment, choose **Gain / offset / zero DC mean**. **DC component** offers a
+manual signed offset, subtraction of the entire-session mean, or subtraction of the visible
+X-range mean (in Time or Distance mode). With **Gain = 1** and **Offset = 0**, valid samples
+in the reference range have zero mean. The same constant shifts the whole channel, preserving
+its shape; positive offsets add a constant and negative offsets subtract it. Select a known
+zero-load section when you want to preserve sustained physical loads. The removed mean and
+reference time interval are recorded in CSV metadata. Unused Source B/C rows are hidden.
+
 For smoother accelerometer traces, start with **Low-pass filter (RC)**, e.g. **5 Hz**, then
 adjust the cutoff to the motion you want to retain. Lower cutoffs smooth more aggressively.
 The optional forward/backward pass removes phase lag in the interior, adds attenuation

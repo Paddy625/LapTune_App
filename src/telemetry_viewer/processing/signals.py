@@ -11,7 +11,7 @@ from telemetry_viewer.domain.models import Channel
 OPERATIONS = {
     "lowpass": "Low-pass filter (RC)",
     "highpass": "High-pass / remove slow component (RC)",
-    "scale": "Gain and offset: gain × signal + offset",
+    "scale": "Gain / offset / zero DC mean",
     "convert": "Convert units",
     "magnitude": "Vector magnitude (2 or 3 axes)",
     "difference": "Difference: A − B",
@@ -55,6 +55,8 @@ class SignalRecipe:
     cutoff_hz: float = 5.0
     zero_phase: bool = True
     max_gap_s: float = 1.0
+    remove_mean: bool = False
+    mean_time_range_s: tuple[float, float] | None = None
 
 
 def valid_runs(times, valid, max_gap_s):
@@ -108,6 +110,14 @@ def validate_recipe(channels, recipe: SignalRecipe):
         conversion_factor(first.unit, recipe.unit)
     if recipe.operation == "scale" and not np.isfinite([recipe.gain, recipe.offset]).all():
         raise ValueError("Gain and offset must be finite.")
+    if recipe.remove_mean:
+        if recipe.operation != "scale":
+            raise ValueError("DC mean removal is available in the gain/offset operation.")
+        bounds = recipe.mean_time_range_s
+        if bounds is not None and (
+            len(bounds) != 2 or not np.isfinite(bounds).all() or bounds[0] > bounds[1]
+        ):
+            raise ValueError("Choose a valid time interval for the DC reference.")
     if recipe.operation in ("lowpass", "highpass") and (
         not math.isfinite(recipe.cutoff_hz) or recipe.cutoff_hz <= 0
     ):
@@ -137,10 +147,20 @@ def calculate_signal(channels, recipe: SignalRecipe, progress=lambda: None):
         valid &= mask & np.isfinite(data) & np.isfinite(times)
     data, unit = arrays[0], first.unit
     operation = recipe.operation
+    removed_mean = 0.0
     progress()
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         if operation == "scale":
-            result, unit = recipe.gain * data + recipe.offset, recipe.unit or unit
+            if recipe.remove_mean:
+                reference = valid.copy()
+                if recipe.mean_time_range_s is not None:
+                    lo, hi = recipe.mean_time_range_s
+                    reference &= (times >= lo) & (times <= hi)
+                if not reference.any():
+                    raise ValueError("The DC reference range has no valid samples.")
+                removed_mean = float(np.mean(data[reference]))
+            result = recipe.gain * (data - removed_mean) + recipe.offset
+            unit = recipe.unit or unit
         elif operation == "convert":
             result, unit = data * conversion_factor(unit, recipe.unit), normalized_unit(recipe.unit)
         elif operation == "magnitude":
@@ -180,12 +200,16 @@ def calculate_signal(channels, recipe: SignalRecipe, progress=lambda: None):
         )
     details = asdict(recipe)
     details["source_units"] = [channel.unit for channel in sources]
+    if recipe.remove_mean:
+        details["removed_mean"] = removed_mean
     if operation in ("lowpass", "highpass"):
         description = f"{operation} RC, {recipe.cutoff_hz:g} Hz, " + (
             "forward/backward (zero phase)" if recipe.zero_phase else "causal"
         )
     else:
         description = OPERATIONS[operation]
+        if recipe.remove_mean:
+            description += f"; removed mean {removed_mean:.9g} {first.unit}"
     return Channel(
         recipe.name,
         unit,
