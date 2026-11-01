@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
         self.plot_layout.addWidget(self.plots, 1)
         self.setCentralWidget(self.plot_content)
         self.channels = ChannelPanel()
+        self.channels.restore_colors(self._saved_layout.get("colors", {}))
         self.channel_content = QWidget()
         self.channel_layout = QVBoxLayout(self.channel_content)
         self.channel_layout.setContentsMargins(0, 0, 0, 0)
@@ -165,6 +166,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.map_dock)
         self.resizeDocks([self.channel_dock, self.map_dock], [400, 380], Qt.Orientation.Horizontal)
         self.channels.selection_updated.connect(self.refresh_plots)
+        self.channels.color_changed.connect(self.on_channel_color_changed)
         self.channels.calculate_requested.connect(self.show_signal_tools)
         self.plots.position_changed.connect(self.on_plot_position)
         self.plots.configure_requested.connect(self.configure_plot)
@@ -500,6 +502,7 @@ class MainWindow(QMainWindow):
         selection = self.channels.selection()
         self._saved_layout = {
             "count": self.count_combo.currentIndex() + 1,
+            "colors": self.channels.custom_colors,
             "plots": [
                 {
                     "title": self.plots.titles[p],
@@ -510,6 +513,10 @@ class MainWindow(QMainWindow):
             ],
         }
         self.settings.setValue("plot_layout_v2", json.dumps(self._saved_layout))
+
+    def on_channel_color_changed(self, name, color):
+        self.plots.set_channel_color(name, color)
+        self.save_plot_layout()
 
     def plot_count_changed(self, index):
         self.plots.set_count(index + 1)
@@ -638,7 +645,7 @@ class MainWindow(QMainWindow):
             return
         self.cursor_sample = int(np.clip(sample, 0, len(self.session.nr) - 1))
         s, i = self.session, self.cursor_sample
-        self.plots.set_cursor(float(s.axis(self.axis_mode)[i]))
+        self.plots.set_cursor(float(s.axis(self.axis_mode)[i]), sample=i)
         self.channels.set_cursor(i)
         self.map_widget.set_cursor(i)
         self.cursor_label.setText(

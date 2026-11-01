@@ -92,6 +92,18 @@ class Session:
             return self.distance_m
         return np.interp(channel.time_s, self.elapsed_time_s, self.distance_m)
 
+    def channel_sample_at(self, channel: Channel, sample: int) -> int | None:
+        """Nearest recorded channel sample at an active session row, including stops."""
+        if not len(channel.time_s):
+            return None
+        if channel.time_s is self.elapsed_time_s:
+            return sample
+        time = self.elapsed_time_s[sample]
+        i = min(int(np.searchsorted(channel.time_s, time)), len(channel.time_s) - 1)
+        if i and abs(channel.time_s[i - 1] - time) <= abs(channel.time_s[i] - time):
+            i -= 1
+        return i
+
     def sample_at(self, x: float, mode: str, active: int = 0) -> int:
         axis = self.axis(mode)
         i = int(np.searchsorted(axis, x))

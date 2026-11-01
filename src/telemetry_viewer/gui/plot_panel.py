@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPointF, Qt, Signal
 from PySide6.QtGui import QFontMetricsF, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsItem,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from telemetry_viewer.domain.models import Session
 from telemetry_viewer.gui.theme import BACKGROUND, CURSOR, MUTED, SERIES_COLORS, SURFACE, TEXT
-from telemetry_viewer.processing.display import elapsed_clock
+from telemetry_viewer.processing.display import cursor_number, elapsed_clock
 from telemetry_viewer.processing.scales import channel_unit, full_y_range
 
 COLORS = SERIES_COLORS
@@ -178,6 +178,11 @@ class PlotPanel(QWidget):
         self.titles = [f"Plot {i + 1}" for i in range(4)]
         self._unit_channels = [{} for _ in range(4)]
         self._right_columns = 0
+        self._panel_channels = [[] for _ in range(4)]
+        self._cursor_sample = None
+        self._cursor_x = 0.0
+        self.cursor_readouts = []
+        self._readout_signatures = [None] * 4
         self.graphics = pg.GraphicsLayoutWidget()
         # Clock labels extend beyond the last tick; keep their full hh:mm:ss visible.
         self.graphics.ci.layout.setContentsMargins(9, 9, 40, 9)
@@ -256,9 +261,22 @@ class PlotPanel(QWidget):
             self.axes.append(axis)
             self.plots.append(plot)
             self.cursors.append(cursor)
+            readout = pg.TextItem(
+                anchor=(0, 0), fill=pg.mkBrush((17, 18, 20, 235)), border=pg.mkPen("#383e46")
+            )
+            readout.setZValue(10000)
+            readout.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            readout.textItem.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            readout.textItem.document().setDocumentMargin(4)
+            readout.hide()
+            # A scene overlay stays above every unit-specific ViewBox, without
+            # participating in auto-range or intercepting plot mouse gestures.
+            self.graphics.scene().addItem(readout)
+            self.cursor_readouts.append(readout)
             if i:
                 plot.setXLink(self.plots[0])
             plot.vb.sigXRangeChanged.connect(lambda *_args, p=plot: self._update_sampling(p))
+            plot.vb.sigXRangeChanged.connect(lambda *_args, p=i: self._position_readout(p))
             plot.vb.sigResized.connect(lambda *_args, p=i: self._resize_views(p))
         scene = self.graphics.scene()
         self.proxies.append(pg.SignalProxy(scene.sigMouseMoved, rateLimit=30, slot=self._hover))
@@ -296,6 +314,7 @@ class PlotPanel(QWidget):
                 view.setVisible(i < count)
                 axis.setVisible(i < count)
         self._align_axes()
+        self._update_cursor_readouts()
 
     def _align_axes(self):
         columns = max((len(axes) - 1 for axes in self.unit_views[: self._count]), default=0)
@@ -379,16 +398,20 @@ class PlotPanel(QWidget):
             axis.picture = None
             axis.update()
         self._update_sampling(plot)
+        self._position_readout(panel)
 
     def set_selection(self, session, selection, mode="time"):
         new_session = self.session is not session
         if new_session:
             self._masked_values.clear()
             self.y_ranges = [{} for _ in range(4)]
+            self._cursor_sample = None
         self._clear_curves()
         self.session, self.mode = session, mode
+        self._panel_channels = [[] for _ in range(4)]
         groups = [{} for _ in range(4)]
         for name, panel, color in selection:
+            self._panel_channels[panel].append((name, color))
             unit = channel_unit(session.channels[name])
             groups[panel].setdefault(unit, []).append((name, color))
         for i, plot in enumerate(self.plots):
@@ -489,9 +512,89 @@ class PlotPanel(QWidget):
         }
         self.set_y_ranges(panel, ranges)
 
-    def set_cursor(self, x):
+    def set_channel_color(self, name, color):
+        for (_panel, channel_name), (curve, plot) in self.curves.items():
+            if channel_name != name:
+                continue
+            pen = pg.mkPen(curve.opts["pen"])
+            pen.setColor(pg.mkColor(color))
+            curve.setPen(pen)
+            for sample, _label in plot.legend.items:
+                if sample.item is curve:
+                    sample.update()
+        for panel in range(4):
+            self._panel_channels[panel] = [
+                (channel_name, color if channel_name == name else previous)
+                for channel_name, previous in self._panel_channels[panel]
+            ]
+            for unit, names in self._unit_channels[panel].items():
+                if names and names[0] == name:
+                    self.unit_axes[panel][unit].setPen(color)
+                    self.unit_axes[panel][unit].setTextPen(color)
+        self._update_cursor_readouts()
+
+    def set_cursor(self, x, sample=None):
+        self._cursor_x = float(x)
+        if self.session is not None:
+            self._cursor_sample = (
+                self.session.sample_at(x, self.mode, self._cursor_sample or 0)
+                if sample is None
+                else sample
+            )
         for cursor in self.cursors + [c for cursors in self._aux_cursors for c in cursors]:
             cursor.setPos(x)
+        self._update_cursor_readouts()
+
+    def _update_cursor_readouts(self):
+        values = {}
+        for panel, channels in enumerate(self._panel_channels):
+            if self.session is None or self._cursor_sample is None or not channels:
+                self.cursor_readouts[panel].hide()
+                continue
+            signature = []
+            for name, color in channels:
+                if name not in values:
+                    channel = self.session.channels[name]
+                    index = self.session.channel_sample_at(channel, self._cursor_sample)
+                    value = (
+                        float(channel.samples[index])
+                        if index is not None and channel.valid[index]
+                        else None
+                    )
+                    values[name] = cursor_number(value)
+                signature.append((name, color, values[name]))
+            signature = tuple(signature)
+            if signature != self._readout_signatures[panel]:
+                lines = "<br>".join(
+                    f'<span style="color:{color}">{value}</span>'
+                    for _name, color, value in signature
+                )
+                self.cursor_readouts[panel].setHtml(f'<div style="font-size:12px">{lines}</div>')
+                self._readout_signatures[panel] = signature
+            self._position_readout(panel)
+
+    def _position_readout(self, panel):
+        readout = self.cursor_readouts[panel]
+        plot = self.plots[panel]
+        if self._cursor_sample is None or not self._panel_channels[panel] or not plot.isVisible():
+            readout.hide()
+            return
+        left, right = plot.vb.viewRange()[0]
+        if not left <= self._cursor_x <= right:
+            readout.hide()
+            return
+        rect = plot.vb.sceneBoundingRect()
+        bounds = readout.boundingRect()
+        scale = min(1.0, max(1, rect.height() - 12) / max(1, bounds.height()))
+        readout.setScale(scale)
+        width = bounds.width() * scale
+        cursor_x = plot.vb.mapViewToScene(QPointF(self._cursor_x, 0)).x()
+        x = cursor_x + 7
+        if x + width > rect.right() - 4:
+            x = cursor_x - width - 7
+        x = max(rect.left() + 4, min(x, rect.right() - width - 4))
+        readout.setPos(x, rect.top() + 6)
+        readout.show()
 
     def fit_all(self):
         # Fit/reset affects X only. Y changes exclusively through the plot options.

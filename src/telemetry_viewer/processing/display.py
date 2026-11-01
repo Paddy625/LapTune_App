@@ -3,6 +3,14 @@
 import math
 
 
+def cursor_number(value: float | None) -> str:
+    """Compact, numeric-only readout; retain a row for missing or invalid data."""
+    if value is None or not math.isfinite(value):
+        return "—"
+    text = f"{value:.3f}"
+    return text if len(text) <= 12 else f"{value:.6g}"
+
+
 def elapsed_clock(value: float, milliseconds: bool = False) -> str:
     if not math.isfinite(value):
         return "—"

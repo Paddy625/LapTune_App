@@ -96,7 +96,7 @@ item state and are edited per plot. A fixed footer below the scrolling tree owns
 and statistics buttons through shared QActions, including calculation busy-state changes.
 The calculation button prefills the selected source. Refresh never expands
 the visible count to include hidden assignments, and recreated auxiliary views respect visibility.
-QSettings key plot_layout_v2 stores count, titles, channel names and explicit bounds,
+QSettings key plot_layout_v2 stores count, titles, channel names, custom colors and explicit bounds,
 never measurement arrays. Metadata changes preserve those
 assignments. CSV export deduplicates selected channel names across plots. The pure processing
 helpers display.py and scales.py format elapsed durations and calculate valid data ranges.
@@ -107,6 +107,16 @@ footers share the plot background. Plot
 backgrounds, headers, legends, series colors and cursors use the same palette constants.
 The local Leaflet page mirrors the theme for its route, cursor, controls and offline overlays;
 range-bound markers retain their distinct start/end colors.
+
+ChannelPanel's color menu updates the existing PlotDataItems, legend samples, unit-axis colors
+and cursor readouts without rebuilding data or changing ranges. Its custom-color map survives
+channel repopulation and is persisted in plot_layout_v2. Numeric-only cursor stacks are scene
+TextItem overlays above all unit ViewBoxes; they do not participate in auto-range or mouse
+interaction. Cached text signatures avoid relayout when rounded values have not changed.
+Bounds/resize updates keep stacks inside their own plot, fitting shorter panels and switching
+to the left of the cursor at the right edge. Session.channel_sample_at provides the same
+nearest-recorded lookup for the Channels list and plot overlays, including independent channel
+clocks and distance plateaus. It does not interpolate new measurements.
 
 ## Derived signals and viewport map bounds
 

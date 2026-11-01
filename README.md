@@ -122,6 +122,9 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 - Channels lists measurements and cursor values without checkboxes.
   Choose channels for each plot through **Configure plot…**; right-click a channel to
   calculate/filter it or solo/hide all. A channel can appear in several plots.
+- Right-click a channel and choose **Change color…** to recolor that signal everywhere,
+  including its curve, legend sample, cursor value and any Y axis led by that signal.
+  Custom colors are remembered locally across sessions and restarts; cancelling keeps the old color.
 - **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
   fills the height of the toolbar at its right edge.
 - **Time**, the distance method (**Speed integral** / **GPS geodesic**), **Fit X** and the
@@ -134,6 +137,11 @@ This is a portable **onedir** build, not a standalone onefile EXE.
   data, cursor values and exports retain their full resolution.
 - Hover/click a plot to move the common cursor. Click the map to choose the geographically
   nearest GPS change. Points within a 5 m ambiguity band prefer the active time fragment.
+  Each plot shows a vertical stack of its signal values beside the cursor, in legend order
+  and matching colors, without names or units. Values use nearest recorded measurement times,
+  three decimal places (compact scientific notation for very large values), and `—` for missing
+  or invalid samples. The stack moves left near the right edge and hides when the cursor is
+  outside the visible X range.
 - The map marker uses the nearest **recorded** accepted GPS change; no new GPS measurements
   are manufactured. During stops, a flat distance axis keeps the active time where possible.
 - Settings let you describe sensor orientation, relabel acceleration/gyro units and set the

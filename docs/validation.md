@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **73 passed**, including the optional private-log integration test.
+- `pytest -q`: **80 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -108,3 +108,11 @@ at zoom levels 0, 2, 8, 14 and 19. Both 28-pixel bars remain present, use a sepa
 and are perpendicular when a route direction exists. Unknown directions retain a vertical
 tick with an explicit tooltip. Python regressions cover reversal chords and segment-boundary
 isolation. Only the plot/map footer backgrounds change color, matching the plot canvas.
+
+Cursor/color checks cover the actual Channels color-menu path, cancelled color dialogs,
+matching pens on duplicate plots, numeric-only readout order, missing-value placeholders,
+left/right bounds, hidden plots, restoration of saved colors, and unchanged curve identities
+and X/Y ranges during recoloring. Pure checks cover compact numeric formatting and nearest
+channel timestamps during distance plateaus. The synthetic 186,400-sample/six-series benchmark
+with readouts records p95 cursor updates of 1.815 ms, steady painting 6.764 ms and painting
+including pan/zoom of 16.489 ms on this headless host; see benchmarks/cursor-readouts-rendering.json.

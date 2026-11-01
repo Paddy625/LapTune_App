@@ -69,3 +69,13 @@ p95 steady repaint is 5.293 ms; including deliberate pan/zoom frames it is 17.37
 measurements use the same headless host methodology, with constructed data rather than disk I/O.
 Reproduce with `tools/benchmark_rendering.py --samples 186400 --frames 90 --mixed`. The benchmark
 uses temporary settings so it does not overwrite the user's saved plot layout.
+
+## Cursor value stacks
+
+`docs/benchmarks/cursor-readouts-rendering.json` repeats the mixed six-series scenario with
+numeric readouts enabled on 186,400 constructed samples. In 90 frames, p95 cursor update is
+1.815 ms, steady repaint 6.764 ms, repaint including deliberate pan/zoom 16.489 ms, and map
+round-trip 3.885 ms. Curve identities and source arrays remain unchanged. Rounded-value caches
+avoid rebuilding text documents for unchanged readings; each visible channel is sampled once
+per cursor update even when assigned to multiple plots. This remains a host-specific rendering
+measurement, not a guarantee of TXT import speed or frame rate on other hardware.

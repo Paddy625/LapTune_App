@@ -11,7 +11,7 @@ import numpy as np
 import pyqtgraph as pg
 from benchmark_rendering import synthetic_session
 from PySide6.QtCore import QPoint, QPointF, Qt, QTimer
-from PySide6.QtGui import QWheelEvent
+from PySide6.QtGui import QColor, QWheelEvent
 
 from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
@@ -347,6 +347,69 @@ def check():
                 window.configure_plot(1)
             assert window.count_combo.currentIndex() == 1
             assert window.plots.plots[1].isVisible() and not window.plots.plots[2].isVisible()
+            # A single source color applies everywhere without recreating curve data.
+            from PySide6.QtWidgets import QColorDialog, QMenu
+
+            window.set_cursor(777)
+            expected = [f"{session.channels[name].samples[777]:.3f}" for name in selected]
+            # selected is intentionally ordered like the legend: ACC, gyro, speed.
+            assert window.plots.cursor_readouts[0].textItem.toPlainText().splitlines() == expected
+            assert not window.plots.cursor_readouts[2].isVisible()
+            session.channels["ACC_X"].valid[777] = False
+            window.set_cursor(777)
+            assert window.plots.cursor_readouts[0].textItem.toPlainText().splitlines()[0] == "—"
+            session.channels["ACC_X"].valid[777] = True
+            window.set_cursor(777)
+            curves_before = {key: id(curve) for key, (curve, _) in window.plots.curves.items()}
+            ranges_before = y_snapshot()
+            x_before = tuple(window.plots.plots[0].vb.viewRange()[0])
+
+            class ColorMenu(QMenu):
+                def exec(self, _pos):
+                    return next(
+                        action for action in self.actions() if action.text() == "Change color…"
+                    )
+
+            with (
+                patch("telemetry_viewer.gui.channel_panel.QMenu", ColorMenu),
+                patch.object(QColorDialog, "getColor", return_value=QColor("#43e8c1")),
+            ):
+                item = window.channels.items["ACC_X"][0]
+                window.channels._menu(window.channels.visualItemRect(item).center())
+            assert window.channels.items["ACC_X"][2] == "#43e8c1"
+            assert window.channels.items["ACC_X"][0].foreground(0).color().name() == "#43e8c1"
+            assert {
+                key: id(curve) for key, (curve, _) in window.plots.curves.items()
+            } == curves_before
+            for panel in (0, 1):
+                assert (
+                    window.plots.curves[(panel, "ACC_X")][0].opts["pen"].color().name() == "#43e8c1"
+                )
+                assert "#43e8c1" in window.plots.cursor_readouts[panel].textItem.toHtml()
+                assert (
+                    window.plots.unit_axes[panel][units["ACC_X"]].pen().color().name() == "#43e8c1"
+                )
+            assert y_snapshot() == ranges_before
+            assert tuple(window.plots.plots[0].vb.viewRange()[0]) == x_before
+            saved_colors = window.settings.value("plot_layout_v2")
+            assert json.loads(saved_colors)["colors"]["ACC_X"] == "#43e8c1"
+            with patch.object(QColorDialog, "getColor", return_value=QColor()):
+                window.channels.choose_color("ACC_X")
+            assert window.settings.value("plot_layout_v2") == saved_colors
+            # Keep the numeric-only stack inside the plot at either X boundary.
+            window.plots.plots[0].setXRange(0, 20, padding=0)
+            for row in (0, len(session.nr) - 1):
+                window.set_cursor(row)
+                for panel in (0, 1):
+                    label = window.plots.cursor_readouts[panel]
+                    bounds = window.plots.plots[panel].vb.sceneBoundingRect()
+                    assert label.isVisible()
+                    assert label.sceneBoundingRect().left() >= bounds.left()
+                    assert label.sceneBoundingRect().right() <= bounds.right()
+            window.plots.plots[0].setXRange(25, 30, padding=0)
+            assert not any(label.isVisible() for label in window.plots.cursor_readouts)
+            window.plots.plots[0].setXRange(*x_before, padding=0)
+            window.set_cursor(777)
             state["raw_before"] = session.channels["ACC_X"].samples.copy()
             tools = SignalToolsDialog(session, window, source="ACC_X")
             # Hide the whole source row, including its label, for unary operations.
@@ -485,6 +548,9 @@ def check():
             clone.accept_session(session)
             assert clone.count_combo.currentIndex() == 1
             assert sum(plot.isVisible() for plot in clone.plots.plots) == 2
+            assert clone.channels.items["ACC_X"][2] == "#43e8c1"
+            clone.channels.apply_plot_selection(0, ["ACC_X"])
+            assert clone.plots.curves[(0, "ACC_X")][0].opts["pen"].color().name() == "#43e8c1"
             clone.close()
             print(
                 "PLOT_CONFIG_PASS "

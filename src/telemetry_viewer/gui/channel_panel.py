@@ -1,8 +1,8 @@
-import numpy as np
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QColorDialog,
     QHeaderView,
     QMenu,
     QTreeWidget,
@@ -15,6 +15,7 @@ from telemetry_viewer.gui.plot_panel import COLORS
 class ChannelPanel(QTreeWidget):
     selection_updated = Signal()
     calculate_requested = Signal(str)
+    color_changed = Signal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,6 +27,7 @@ class ChannelPanel(QTreeWidget):
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.items = {}
         self.session = None
+        self.custom_colors = {}
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._menu)
 
@@ -46,7 +48,7 @@ class ChannelPanel(QTreeWidget):
             if assignments is not None:
                 panels = [p for p, names in enumerate(assignments) if name in names]
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
-            color = COLORS[i % len(COLORS)]
+            color = self.custom_colors.get(name, COLORS[i % len(COLORS)])
             item.setForeground(0, QColor(color))
             item.setToolTip(
                 0, f"{channel.source}; recorded samples; no fixed update-rate assumption"
@@ -55,6 +57,28 @@ class ChannelPanel(QTreeWidget):
         self.expandAll()
         self.blockSignals(False)
         self.selection_updated.emit()
+
+    def restore_colors(self, colors):
+        if isinstance(colors, dict):
+            self.custom_colors = {
+                name: QColor(color).name()
+                for name, color in colors.items()
+                if isinstance(name, str) and isinstance(color, str) and QColor(color).isValid()
+            }
+
+    def choose_color(self, name):
+        previous = self.items[name][2]
+        color = QColorDialog.getColor(QColor(previous), self, f"Channel color · {name}")
+        if not color.isValid() or name not in self.items:
+            return
+        item, panels, previous = self.items[name]
+        if color.name() == previous:
+            return
+        chosen = color.name()
+        self.custom_colors[name] = chosen
+        self.items[name] = item, panels, chosen
+        item.setForeground(0, color)
+        self.color_changed.emit(name, chosen)
 
     def selection(self):
         return [
@@ -75,15 +99,13 @@ class ChannelPanel(QTreeWidget):
     def set_cursor(self, sample):
         if self.session is None:
             return
-        time = self.session.elapsed_time_s[sample]
         for name, (item, _, _) in self.items.items():
             channel = self.session.channels[name]
-            if channel.time_s is self.session.elapsed_time_s:
-                i = sample
-            else:
-                i = min(int(np.searchsorted(channel.time_s, time)), len(channel.time_s) - 1)
-                if i and abs(channel.time_s[i - 1] - time) <= abs(channel.time_s[i] - time):
-                    i -= 1
+            i = self.session.channel_sample_at(channel, sample)
+            if i is None:
+                item.setText(1, "—")
+                item.setToolTip(1, "No recorded samples")
+                continue
             item.setText(1, f"{channel.samples[i]:.3f}" if channel.valid[i] else "invalid")
             item.setToolTip(1, f"Nearest sample at {channel.time_s[i]:.6f} s")
 
@@ -92,10 +114,15 @@ class ChannelPanel(QTreeWidget):
         if target is None or not target.data(0, Qt.ItemDataRole.UserRole):
             return
         menu = QMenu(self)
+        color = menu.addAction("Change color…")
+        menu.addSeparator()
         calculate = menu.addAction("Calculate / filter…")
         only = menu.addAction("Show only this channel")
         none = menu.addAction("Hide all channels")
         chosen = menu.exec(self.viewport().mapToGlobal(pos))
+        if chosen == color:
+            self.choose_color(target.data(0, Qt.ItemDataRole.UserRole))
+            return
         if chosen == calculate:
             self.calculate_requested.emit(target.data(0, Qt.ItemDataRole.UserRole))
             return
