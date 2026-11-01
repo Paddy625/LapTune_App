@@ -38,7 +38,6 @@ from telemetry_viewer.gui.channel_panel import ChannelPanel
 from telemetry_viewer.gui.plot_config import PlotConfigurationDialog
 from telemetry_viewer.gui.plot_panel import PlotPanel
 from telemetry_viewer.gui.signal_tools import SignalToolsDialog, StatisticsDialog
-from telemetry_viewer.gui.theme import SURFACE
 from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
 from telemetry_viewer.processing.display import elapsed_clock
@@ -274,7 +273,7 @@ class MainWindow(QMainWindow):
         self.brand_toolbar.setFixedHeight(60)
         self.brand_toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.brand_toolbar.setStyleSheet(
-            f"QToolBar {{padding:0; margin:0; border:0; spacing:0; background:{SURFACE};}}"
+            "QToolBar {padding:0; margin:0; border:0; spacing:0; background:#000000;}"
         )
         self.brand_logo = QLabel()
         self.brand_logo.setObjectName("laptune_brand")

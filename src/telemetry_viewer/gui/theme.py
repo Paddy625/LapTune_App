@@ -16,9 +16,10 @@ SERIES_COLORS = ["#ff5265", "#e5e7eb", "#ffbc72", "#baabff", "#ff92b2", "#dfd58d
 STYLE = """
 QMainWindow,QDialog { background: #111214; color: #f2f3f5; }
 QWidget { font-family: 'Segoe UI', 'DejaVu Sans'; font-size: 12px; }
-QMenuBar,QToolBar,QStatusBar { background: #202328; color: #f2f3f5; border: 0; }
+QMenuBar,QToolBar { background: #000000; color: #f2f3f5; border: 0; }
+QStatusBar { background: #202328; color: #f2f3f5; border: 0; }
 QMenuBar::item { padding: 4px 8px; }
-QToolBar { spacing: 7px; padding: 9px; border-bottom: 1px solid #383e46; }
+QToolBar { spacing: 7px; padding: 9px; }
 QMenuBar::item:selected,QMenu::item:selected { background: #762032; color: #fff; }
 QMenu { background: #24282e; color: #f2f3f5; border: 1px solid #444b55; }
 QToolButton,QComboBox,QPushButton,QLineEdit,QAbstractSpinBox {

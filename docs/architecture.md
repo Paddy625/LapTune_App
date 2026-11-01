@@ -97,7 +97,8 @@ never measurement arrays. Metadata changes preserve those
 assignments. CSV export deduplicates selected channel names across plots. The pure processing
 helpers display.py and scales.py format elapsed durations and calculate valid data ranges.
 
-gui/theme.py defines the shared graphite/red/white control palette and stylesheet. Plot
+gui/theme.py defines the shared graphite/red/white control palette and stylesheet. Top menus
+and both toolbars use pure black to blend with the logo background. Plot
 backgrounds, headers, legends, series colors and cursors use the same palette constants.
 The local Leaflet page mirrors the theme for its route, cursor, controls and offline overlays;
 range-bound markers retain their distinct start/end colors.
