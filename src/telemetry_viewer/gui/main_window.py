@@ -275,6 +275,7 @@ class MainWindow(QMainWindow):
         self.plots.set_count(count)
         self.count_combo.currentIndexChanged.connect(self.plot_count_changed)
         self.plot_controls.addWidget(self.count_combo)
+        self.plot_controls.setMinimumWidth(self.plot_controls.sizeHint().width())
         self.map_controls = QToolBar("Map controls", self.map_content)
         self.map_controls.setObjectName("map_controls")
         self.map_controls.setMovable(False)
@@ -284,6 +285,7 @@ class MainWindow(QMainWindow):
         self.layer_combo.addItems(["Road", "Offline", "Satellite"])
         self.layer_combo.currentTextChanged.connect(self.layer_changed)
         self.map_controls.addWidget(self.layer_combo)
+        self.map_controls.setMinimumWidth(self.map_controls.sizeHint().width())
         # A dedicated toolbar keeps branding visible even when analysis controls overflow.
         self.brand_toolbar = QToolBar("LapTune")
         self.brand_toolbar.setObjectName("branding")
