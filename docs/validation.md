@@ -96,3 +96,7 @@ GUI smoke waits for the actual WebChannel map-click signal before checking the c
 The synthetic click is delayed by 400 ms to exercise asynchronous delivery beyond the
 150 ms polling interval in both source tests and the frozen Windows executable. Failures
 include the current phase and traceback for CI diagnostics.
+
+The control-layout update changes MainWindow placement only: existing callbacks, data processing,
+plot behavior, map behavior and theme remain intact. The GUI suite and regenerated synthetic
+screenshots were used to review the plot/map footers, menu actions and status-bar report access.

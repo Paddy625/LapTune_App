@@ -124,7 +124,11 @@ This is a portable **onedir** build, not a standalone onefile EXE.
   calculate/filter it or solo/hide all. A channel can appear in several plots.
 - **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
   fills the height of the toolbar at its right edge.
-- Wheel to zoom X, drag to pan X, right-drag to scale X. Ctrl+0 / **Fit X** / **Reset X zoom**
+- **Time**, the distance method (**Speed integral** / **GPS geodesic**), **Fit X** and the
+  plot count are below the plots. The map layer (**Road** / **Offline** / **Satellite**) is below the map.
+  **Settings** and **Export** are on the File/View/Session/Help menu row.
+  **Quality report** is beside the data summary in the bottom status bar.
+- Wheel to zoom X, drag to pan X, right-drag to scale X. Ctrl+0 / **Fit X**
   reset only X. Y is fixed until explicitly changed through a plot's options.
   Visible peak/min-max reduction adapts to viewport width and actual sample density; source
   data, cursor values and exports retain their full resolution.

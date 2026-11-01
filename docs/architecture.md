@@ -73,6 +73,10 @@ right-hand AxisItem. All share X geometry/ranges and cursor positions. Additiona
 columns are reserved equally across visible panels. Unknown units use channel-specific groups.
 The plot's minimum width includes its axis columns and a usable data area; docks yield space
 on smaller screens. The analysis toolbar overflows before the 60-pixel branding toolbar does.
+Plot and map widgets sit in zero-margin containers with their existing controls below them.
+The plot footer owns axis mode, distance method, Fit X and count; the map footer owns the
+layer selector. Settings/Export live on the menu row, and Quality report sits beside the
+status summary. All controls keep their existing handlers; the duplicate Reset X zoom is removed.
 
 XOnlyViewBox directs wheel/drag gestures, including gestures over auxiliary layers, to X only.
 All Y auto-range flags are disabled; PlotItem's native auto-range buttons/menus are replaced by
