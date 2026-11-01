@@ -119,8 +119,9 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 
 ## Controls and data interpretation
 
-- Channels: checkbox to show; the Panel menu selects one or several plots (1–4); right-click
-  to solo/hide all. A channel can be displayed in several plots without duplicating CSV columns.
+- Channels lists measurements and cursor values; checkboxes show/hide assigned signals.
+  Choose channels for each plot through **Configure plot…**; right-click a channel to
+  calculate/filter it or solo/hide all. A channel can appear in several plots.
 - **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
   fills the height of the toolbar at its right edge.
 - Wheel to zoom X, drag to pan X, right-drag to scale X. Ctrl+0 / **Fit X** / **Reset X zoom**
@@ -157,15 +158,54 @@ not change existing Y ranges. A new unit/session initializes its scale from vali
 you have saved explicit limits. Adding a wider signal to an existing unit may therefore require
 an explicit **Fit Y to all data**.
 
-Titles, channel assignments and explicit Y ranges persist locally in QSettings. Time ticks
+The chosen number of visible plots stays fixed while configuring channels, changing units,
+adding calculated signals or switching axes. Hidden plots retain their assignments.
+The plot count, titles, channel assignments and explicit Y ranges persist locally in QSettings. Time ticks
 start at `00:00:00` and do not wrap after 24 hours; cursor readout retains milliseconds.
 
 ![Real mixed-unit plot with synthetic signals and independent Y axes](docs/mixed-units.png)
+
+### Calculate, filter and analyze signals
+
+Use **Analysis → Calculate / filter signals…** (also available by right-clicking a channel).
+Choose a source, operation and a unique result name. Results appear in the **Calculated**
+category; add them to any plot through **Configure plot…**. Sources are preserved, and
+calculated channels can feed further calculations. Computation runs in a background worker.
+
+Available operations are RC low-pass/high-pass, gain plus offset, unit conversion
+(`g ↔ m/s²`, `km/h ↔ m/s`, `deg/s ↔ rad/s`), two/three-axis vector magnitude, A−B,
+time derivative and trapezoidal time integral. Confirm source units before conversion;
+the default acceleration/gyro labels are assumptions, not calibration.
+
+For smoother accelerometer traces, start with **Low-pass filter (RC)**, e.g. **5 Hz**, then
+adjust the cutoff to the motion you want to retain. Lower cutoffs smooth more aggressively.
+The optional forward/backward pass removes phase lag in the interior, adds attenuation
+(approximately −6 dB at the RC cutoff) and has edge transients. This is a time-aware
+one-pole RC filter, not a Butterworth filter. It uses each actual time interval and resets
+at invalid rows, non-increasing times and gaps above the configured threshold. It does not
+remove gravity or resolve sensor orientation. High-pass also removes sustained acceleration.
+
+Multi-source calculations use shared exact timestamps, without filling missing measurements.
+Integrals restart at zero per valid segment. Calculated channels belong to the loaded session;
+export selected channels to CSV to retain results and their parameters in the metadata JSON.
+
+**Analysis → Signal statistics…** reports count, min/max, mean, RMS, standard deviation and
+peak-to-peak values for the visible X range or entire session, using valid full-resolution
+source/calculated samples.
+
+![Calculated acceleration, two plots and visible-range GPS ticks](docs/calculated-range.png)
 
 See [data format and processing](docs/data-format.md), [architecture](docs/architecture.md)
 and [rendering performance measurements](docs/performance.md).
 
 ## Maps and privacy
+
+Green **start** and pink **end** ticks mark the X range currently visible on the plots, in
+both Time and Distance modes. They snap to the nearest accepted recorded GPS positions;
+tooltips show their time and row. Ticks stay perpendicular to the local recorded route as
+you zoom the map; a stationary point uses a dot. Endpoints inside a GPS gap are hidden.
+On distance plateaus, start/end use the first/last recorded instant. Plot panning does not
+refit the map or redraw the static route.
 
 Leaflet code/CSS is bundled locally; it needs no CDN at runtime. Road mode uses
 `https://tile.openstreetmap.org/{z}/{x}/{y}.png` with visible OpenStreetMap attribution.

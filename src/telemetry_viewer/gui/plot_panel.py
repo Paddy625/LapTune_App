@@ -178,6 +178,8 @@ class PlotPanel(QWidget):
         self._unit_channels = [{} for _ in range(4)]
         self._right_columns = 0
         self.graphics = pg.GraphicsLayoutWidget()
+        # Clock labels extend beyond the last tick; keep their full hh:mm:ss visible.
+        self.graphics.ci.layout.setContentsMargins(9, 9, 40, 9)
         self.plots, self.cursors, self.axes = [], [], []
         self.headers, self.title_labels, self.options_menus = [], [], []
         for i in range(4):
@@ -295,7 +297,7 @@ class PlotPanel(QWidget):
         columns = max(0, columns)
         # Dock panels must yield space to the plot, including on small laptop screens.
         # Otherwise extra Y axes can end up outside the graphics viewport entirely.
-        self.setMinimumWidth(max(340, 78 * (columns + 1) + 240))
+        self.setMinimumWidth(max(360, 78 * (columns + 1) + 260))
         for plot in self.plots:
             for column in range(2, max(columns, self._right_columns) + 2):
                 plot.layout.setColumnFixedWidth(column, 78 if column < columns + 2 else 0)
@@ -441,6 +443,8 @@ class PlotPanel(QWidget):
         for i, plot in enumerate(self.plots):
             self._resize_views(i)
             self._update_sampling(plot)
+        # Newly created auxiliary viewboxes must respect hidden panel visibility too.
+        self.set_count(self._count)
 
     def _update_sampling(self, plot):
         if self.session is None:

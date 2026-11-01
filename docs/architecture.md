@@ -87,7 +87,27 @@ based on the full hh:mm:ss text width and enough margin for edge labels. This av
 entire grid on cursor movement. The synthetic mixed-axis benchmark is recorded in benchmarks/.
 
 PlotConfigurationDialog edits titles, channel selection and per-unit bounds atomically. The
-Channels panel has multi-plot assignment menus. QSettings key plot_layout_v2 stores titles,
-channel names and explicit bounds, never measurement arrays. Metadata changes preserve those
+Channels panel lists names/values only; assignments are edited per plot. Refresh never expands
+the visible count to include hidden assignments, and recreated auxiliary views respect visibility.
+QSettings key plot_layout_v2 stores count, titles, channel names and explicit bounds,
+never measurement arrays. Metadata changes preserve those
 assignments. CSV export deduplicates selected channel names across plots. The pure processing
 helpers display.py and scales.py format elapsed durations and calculate valid data ranges.
+
+## Derived signals and viewport map bounds
+
+SignalRecipe describes an immutable calculation request. The Qt-free processing/signals.py
+validates parameters, aligns multiple inputs on exact common timestamps and produces a new
+Channel with group Calculated and exported calculation provenance. RC filter coefficients are
+`1-exp(-2*pi*fc*dt)` for every actual interval; an optional backward pass cancels interior phase
+lag. Invalid rows, non-increasing clocks and configured long gaps split processing runs.
+Derivatives/integrals use actual dt, and integrals restart at segment boundaries. A QThread
+worker performs computation; publication happens on the GUI thread, preserving assignments,
+panel count and raw arrays. Statistics use source/calculated arrays, never rendered data.
+
+RouteRange precomputes distinct vertices and segment-aware tangent neighbors. Binary searches
+snap X viewport endpoints to accepted temporal GPS fixes; plateau edges choose first/last
+instants, and GPS gaps do not create invented route segments. A 30 ms timer coalesces X-range
+updates, and unchanged snapped bounds do not send repeated JavaScript. Leaflet uses a separate
+SVG renderer for the two bounds so the route's cached canvas is retained. Markers are 28-pixel
+perpendicular ticks recalculated at map zoom/pan, with dots for stationary fixes.

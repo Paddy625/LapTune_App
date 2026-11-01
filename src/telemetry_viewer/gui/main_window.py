@@ -36,9 +36,11 @@ from telemetry_viewer.exporters.files import export_csv, export_gpx
 from telemetry_viewer.gui.channel_panel import ChannelPanel
 from telemetry_viewer.gui.plot_config import PlotConfigurationDialog
 from telemetry_viewer.gui.plot_panel import PlotPanel
+from telemetry_viewer.gui.signal_tools import SignalToolsDialog, StatisticsDialog
 from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
 from telemetry_viewer.processing.display import elapsed_clock
+from telemetry_viewer.processing.signals import calculate_signal
 
 
 class ImportWorker(QObject):
@@ -68,6 +70,32 @@ class ImportWorker(QObject):
             self.finished.emit()
 
 
+class CalculationWorker(QObject):
+    result = Signal(object)
+    error = Signal(str)
+    finished = Signal()
+
+    def __init__(self, channels, recipe):
+        super().__init__()
+        self.channels, self.recipe = channels, recipe
+
+    @Slot()
+    def run(self):
+        try:
+
+            def check_cancelled():
+                if QThread.currentThread().isInterruptionRequested():
+                    raise InterruptedError("Calculation cancelled")
+
+            channel = calculate_signal(self.channels, self.recipe, check_cancelled)
+            check_cancelled()
+            self.result.emit(channel)
+        except Exception as exc:
+            self.error.emit(str(exc))
+        finally:
+            self.finished.emit()
+
+
 class MainWindow(QMainWindow):
     session_loaded = Signal()
 
@@ -83,6 +111,7 @@ class MainWindow(QMainWindow):
         self.source_path = None
         self.cursor_sample = 0
         self.thread = None
+        self.calculation_thread = None
         self.closing = False
         self.plots = PlotPanel()
         self._loading_layout = False
@@ -120,11 +149,17 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.map_dock)
         self.resizeDocks([self.channel_dock, self.map_dock], [400, 380], Qt.Orientation.Horizontal)
         self.channels.selection_updated.connect(self.refresh_plots)
+        self.channels.calculate_requested.connect(self.show_signal_tools)
         self.plots.position_changed.connect(self.on_plot_position)
         self.plots.configure_requested.connect(self.configure_plot)
         self.plots.layout_changed.connect(self.save_plot_layout)
         self.map_widget.location_selected.connect(self.on_map_position)
         self._build_actions()
+        self.range_timer = QTimer(self)
+        self.range_timer.setSingleShot(True)
+        self.range_timer.setInterval(30)
+        self.range_timer.timeout.connect(self.update_map_range)
+        self.plots.plots[0].vb.sigXRangeChanged.connect(self.schedule_map_range)
         self.summary = QLabel("Open a logger .TXT file to begin · all processing stays local")
         self.summary.setWordWrap(True)
         self.statusBar().addWidget(self.summary, 1)
@@ -172,6 +207,11 @@ class MainWindow(QMainWindow):
         session_menu = self.menuBar().addMenu("&Session")
         session_menu.addAction("Metadata and map provider…", self.configure)
         session_menu.addAction("Data quality and distance report…", self.show_quality)
+        analysis_menu = self.menuBar().addMenu("&Analysis")
+        self.signal_tools_action = analysis_menu.addAction(
+            "Calculate / filter signals…", self.show_signal_tools
+        )
+        self.statistics_action = analysis_menu.addAction("Signal statistics…", self.show_statistics)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("Controls and privacy", self.show_help)
         toolbar = QToolBar("Analysis")
@@ -200,8 +240,11 @@ class MainWindow(QMainWindow):
         toolbar.addAction("Reset X zoom", self.plots.fit_all)
         self.count_combo = QComboBox()
         self.count_combo.addItems(["1 plot", "2 plots", "3 plots", "4 plots"])
-        self.count_combo.setCurrentIndex(2)
-        self.count_combo.currentIndexChanged.connect(lambda i: self.plots.set_count(i + 1))
+        count = self._saved_layout.get("count", 3)
+        count = count if isinstance(count, int) and 1 <= count <= 4 else 3
+        self.count_combo.setCurrentIndex(count - 1)
+        self.plots.set_count(count)
+        self.count_combo.currentIndexChanged.connect(self.plot_count_changed)
         toolbar.addWidget(self.count_combo)
         toolbar.addSeparator()
         self.layer_combo = QComboBox()
@@ -281,11 +324,12 @@ class MainWindow(QMainWindow):
             self.load_file(path)
 
     def load_file(self, path):
-        if self.thread is not None:
+        if self.thread is not None or self.calculation_thread is not None:
             return
         self.pending_path = Path(path).resolve()
         self.open_action.setEnabled(False)
         self.open_folder_action.setEnabled(False)
+        self.signal_tools_action.setEnabled(False)
         self.progress.setValue(0)
         self.progress.show()
         self.thread = QThread(self)
@@ -309,6 +353,7 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.open_action.setEnabled(True)
         self.open_folder_action.setEnabled(True)
+        self.signal_tools_action.setEnabled(True)
         self.progress.hide()
         if self.closing:
             self.close()
@@ -342,6 +387,7 @@ class MainWindow(QMainWindow):
         self.map_widget.set_session(session)
         self.plots.fit_all()
         self.set_cursor(0)
+        self.schedule_map_range()
         self.setWindowTitle(f"{session.filename} — Telemetry Viewer")
         self.update_summary()
         recent = self.settings.value("recent", [], type=list)
@@ -369,9 +415,6 @@ class MainWindow(QMainWindow):
         if self.session is None:
             return
         selection = self.channels.selection()
-        required = max([panel + 1 for _, panel, _ in selection], default=1)
-        if self.count_combo.currentIndex() + 1 < required:
-            self.count_combo.setCurrentIndex(required - 1)
         self.plots.set_selection(self.session, selection, self.axis_mode)
         self.set_cursor(self.cursor_sample)
         self.save_plot_layout()
@@ -403,6 +446,7 @@ class MainWindow(QMainWindow):
             return
         selection = self.channels.selection()
         self._saved_layout = {
+            "count": self.count_combo.currentIndex() + 1,
             "plots": [
                 {
                     "title": self.plots.titles[p],
@@ -410,9 +454,87 @@ class MainWindow(QMainWindow):
                     "ranges": self.plots.manual_ranges[p],
                 }
                 for p in range(4)
-            ]
+            ],
         }
         self.settings.setValue("plot_layout_v2", json.dumps(self._saved_layout))
+
+    def plot_count_changed(self, index):
+        self.plots.set_count(index + 1)
+        self.save_plot_layout()
+
+    def show_signal_tools(self, source=""):
+        if self.session is None:
+            QMessageBox.information(self, "Open data first", "Open a logger file or folder first.")
+            return
+        if self.thread is not None or self.calculation_thread is not None:
+            return
+        dialog = SignalToolsDialog(
+            self.session, self, source=source if isinstance(source, str) else ""
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.start_calculation(dialog.recipe())
+
+    def start_calculation(self, recipe):
+        if self.session is None or self.thread is not None or self.calculation_thread is not None:
+            return
+        self.open_action.setEnabled(False)
+        self.open_folder_action.setEnabled(False)
+        self.signal_tools_action.setEnabled(False)
+        self.progress.setRange(0, 0)
+        self.progress.show()
+        self.calculation_thread = QThread(self)
+        self.calculation_worker = CalculationWorker(dict(self.session.channels), recipe)
+        self.calculation_worker.moveToThread(self.calculation_thread)
+        self.calculation_thread.started.connect(self.calculation_worker.run)
+        self.calculation_worker.result.connect(self.accept_calculated)
+        self.calculation_worker.error.connect(self.calculation_error)
+        self.calculation_worker.finished.connect(self.calculation_thread.quit)
+        self.calculation_worker.finished.connect(self.calculation_worker.deleteLater)
+        self.calculation_thread.finished.connect(self.calculation_finished)
+        self.calculation_thread.finished.connect(self.calculation_thread.deleteLater)
+        self.calculation_thread.start()
+
+    def accept_calculated(self, channel):
+        if self.closing:
+            return
+        assignments = [
+            [name for name, panel, _ in self.channels.selection() if panel == p] for p in range(4)
+        ]
+        self.session.channels[channel.name] = channel
+        self.channels.populate(self.session, assignments)
+        self.statusBar().showMessage(
+            f"Created {channel.name} in Calculated · choose Configure plot… to display it", 10000
+        )
+
+    def calculation_error(self, message):
+        if not self.closing:
+            QMessageBox.warning(self, "Could not calculate signal", message)
+
+    def calculation_finished(self):
+        self.calculation_thread = None
+        self.open_action.setEnabled(True)
+        self.open_folder_action.setEnabled(True)
+        self.signal_tools_action.setEnabled(True)
+        self.progress.hide()
+        self.progress.setRange(0, 100)
+        if self.closing:
+            self.close()
+
+    def show_statistics(self):
+        if self.session is None:
+            QMessageBox.information(self, "Open data first", "Open a logger file or folder first.")
+            return
+        bounds = self.plots.plots[0].vb.viewRange()[0]
+        StatisticsDialog(self.session, self.axis_mode, bounds, self).exec()
+
+    def schedule_map_range(self, *_):
+        if not self.range_timer.isActive():
+            self.range_timer.start()
+
+    def update_map_range(self):
+        if self.session is not None:
+            lo, hi = self.plots.plots[0].vb.viewRange()[0]
+            self.map_widget.set_visible_range(lo, hi, self.axis_mode)
 
     @property
     def axis_mode(self):
@@ -421,6 +543,7 @@ class MainWindow(QMainWindow):
     def axis_changed(self, *_):
         self.refresh_plots()
         self.plots.fit_all()
+        self.schedule_map_range()
 
     def distance_changed(self, index):
         if self.session is None:
@@ -657,10 +780,13 @@ class MainWindow(QMainWindow):
             "to move cursor. Click the map to select the nearest GPS change; "
             "repeated passages prefer the active time.\n\n"
             "Configure plot… selects any channels, title and per-unit Y ranges. "
-            "A channel can appear in several plots; the Channels panel's assignment menu "
-            "also selects multiple plots. Each distinct unit gets its own Y scale. "
+            "A channel can appear in several plots. Each distinct unit gets its own Y scale. "
             "Time ticks use hh:mm:ss. Layouts and Y limits are saved locally. "
             "Channel context menu: solo/hide all. Panels share X range. "
+            "Analysis > Calculate / filter signals creates channels in Calculated. "
+            "Analysis > Signal statistics uses full-resolution samples "
+            "in the visible range or session. "
+            "Green/pink map ticks show the visible X range's first/last recorded GPS positions. "
             "Distance plateaus preserve the active time where possible.\n\n"
             "Logs remain local. Online maps request tiles around the route, "
             "revealing the viewed area to the provider. Choose Offline to "
@@ -688,6 +814,11 @@ class MainWindow(QMainWindow):
                 break
 
     def closeEvent(self, event):
+        if self.calculation_thread is not None:
+            self.closing = True
+            self.calculation_thread.requestInterruption()
+            event.ignore()
+            return
         if self.thread is not None:
             self.closing = True
             self.thread.requestInterruption()

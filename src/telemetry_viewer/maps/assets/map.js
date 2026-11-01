@@ -4,7 +4,10 @@ const map = L.map('map', {preferCanvas:true}).setView([0,0],2);
 // A moving marker must not repaint the entire static route canvas on each hover.
 const routeRenderer = L.canvas({padding:0.1});
 const markerRenderer = L.svg({padding:0.1});
+const rangeRenderer = L.svg({padding:0.1});
 let bridge = null, route = null, marker = null, tiles = null;
+let visibleRange = null;
+const rangeMarks = L.featureGroup().addTo(map);
 let markerRow = -1, ready = false;
 const notice = document.getElementById('notice');
 function selectLocation(event) {
@@ -14,6 +17,8 @@ map.on('click', selectLocation);
 window.setRoute = function(segments) {
     if(route) map.removeLayer(route);
     if(marker) { map.removeLayer(marker); marker=null; }
+    rangeMarks.clearLayers();
+    visibleRange=null;
     route=L.featureGroup();
     for(const segment of segments) {
         if(segment.length === 1) {
@@ -33,6 +38,27 @@ window.setMarker = function(lat, lon, row) {
     else marker.setLatLng([lat,lon]);
     marker.bindTooltip('Nearest recorded GPS change · row '+row);
 };
+function drawVisibleRange() {
+    rangeMarks.clearLayers();
+    if(!visibleRange) return;
+    for(const [edge, color] of [['start','#8fdf75'],['end','#ff7897']]) {
+        const mark=visibleRange[edge];
+        if(!mark) continue;
+        const p=map.latLngToLayerPoint(mark.point);
+        const before=map.latLngToLayerPoint(mark.before), after=map.latLngToLayerPoint(mark.after);
+        const dx=after.x-before.x, dy=after.y-before.y, norm=Math.hypot(dx,dy);
+        const label='Visible '+edge+' · nearest recorded GPS · '+mark.time+' · row '+mark.row;
+        L.circleMarker(mark.point,{radius:3,color,fillColor:color,fillOpacity:1,weight:2,renderer:rangeRenderer})
+            .bindTooltip(label).addTo(rangeMarks);
+        if(norm>0.01) {
+            const offset=L.point(-dy/norm*14,dx/norm*14);
+            const ends=[map.layerPointToLatLng(p.subtract(offset)),map.layerPointToLatLng(p.add(offset))];
+            L.polyline(ends,{color,weight:3,renderer:rangeRenderer}).bindTooltip(label).addTo(rangeMarks);
+        }
+    }
+}
+window.setVisibleRange = function(bounds) { visibleRange=bounds; drawVisibleRange(); };
+map.on('zoomend moveend',drawVisibleRange);
 window.setLayer = function(mode, url, attribution) {
     if(tiles) { map.removeLayer(tiles); tiles=null; }
     if(mode==='Offline') {notice.textContent='Offline route · no map tiles requested'; return;}

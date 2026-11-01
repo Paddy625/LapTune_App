@@ -37,6 +37,7 @@ class Channel:
     valid: NDArray[np.bool_]
     frequency_hz: float | None = None
     interpolation: Literal["none", "linear", "hold"] = "none"
+    calculation: dict | None = None
 
 
 @dataclass

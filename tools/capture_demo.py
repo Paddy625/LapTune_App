@@ -9,6 +9,7 @@ from PySide6.QtCore import QTimer
 
 from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
+from telemetry_viewer.processing.signals import SignalRecipe, calculate_signal
 
 preferences = isolated_settings()
 app = create_application([])
@@ -25,6 +26,13 @@ def capture():
     if "--mixed" in sys.argv[2:]:
         window.plots.titles[0] = "Dynamics · acceleration / rotation / speed"
         window.channels.apply_plot_selection(0, ["ACC_X", "GYRO_Z", "GPS_SPEED_KMH"])
+    if "--calculated" in sys.argv[2:]:
+        recipe = SignalRecipe("CALC_ACC_X_LP5", "lowpass", ("ACC_X",), cutoff_hz=5)
+        window.accept_calculated(calculate_signal(window.session.channels, recipe))
+        window.count_combo.setCurrentIndex(1)
+        window.plots.titles[0] = "Acceleration · measured / low-pass 5 Hz"
+        window.channels.apply_plot_selection(0, ["ACC_X", recipe.name])
+        window.plots.plots[0].setXRange(30, 120, padding=0)
     window.set_cursor(len(window.session.nr) // 2)
     target = Path(sys.argv[1])
     target.parent.mkdir(parents=True, exist_ok=True)

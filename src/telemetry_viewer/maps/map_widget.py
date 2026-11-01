@@ -9,6 +9,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from telemetry_viewer.domain.models import Session
+from telemetry_viewer.processing.map_range import RouteRange
 
 
 class Bridge(QObject):
@@ -38,6 +39,9 @@ class MapWidget(QWidget):
         self.is_ready = False
         self.current_sample = 0
         self.marker_row = None
+        self.visible_range = None
+        self.range_locator = None
+        self._last_range = None
         self.layer = ("Road", "", "")
         self.view = QWebEngineView(self)
         # Memory-only profile: private tracks and credentials are not put in a web disk cache.
@@ -73,6 +77,10 @@ class MapWidget(QWidget):
             self.set_cursor(self.current_sample)
 
     def set_session(self, session: Session):
+        if self.session is not session:
+            self.visible_range = None
+        self.range_locator = RouteRange(session)
+        self._last_range = None
         self.session = session
         self.marker_row = None
         if not self.is_ready:
@@ -94,6 +102,20 @@ class MapWidget(QWidget):
                 previous = point
         self.page.runJavaScript("setRoute(" + json.dumps(segments, allow_nan=False) + ")")
         self.set_cursor(0)
+        self._send_visible_range()
+
+    def set_visible_range(self, lo, hi, mode):
+        self.visible_range = (float(lo), float(hi), mode)
+        self._send_visible_range()
+
+    def _send_visible_range(self):
+        if not self.is_ready or self.range_locator is None or self.visible_range is None:
+            return
+        marks = self.range_locator.locate(*self.visible_range)
+        encoded = json.dumps(marks, allow_nan=False)
+        if encoded != self._last_range:
+            self.page.runJavaScript("setVisibleRange(" + encoded + ")")
+            self._last_range = encoded
 
     def set_cursor(self, sample):
         self.current_sample = sample

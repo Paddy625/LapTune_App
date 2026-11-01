@@ -16,6 +16,7 @@ from PySide6.QtGui import QWheelEvent
 from telemetry_viewer.app import create_application, isolated_settings
 from telemetry_viewer.gui.main_window import MainWindow
 from telemetry_viewer.gui.plot_config import PlotConfigurationDialog, channel_unit
+from telemetry_viewer.gui.signal_tools import SignalToolsDialog, StatisticsDialog
 
 preferences = isolated_settings()
 app = create_application([])
@@ -59,6 +60,7 @@ def check():
         if phase == "start":
             if not window.map_widget.is_ready:
                 return
+            assert window.map_widget._last_range is not None, "Initial map range was not sent"
             state["phase"] = "dialog"
             dialog = PlotConfigurationDialog(
                 session, 0, ["GPS_SPEED_KMH"], "Plot 1", window.plots.y_ranges[0], window
@@ -122,6 +124,7 @@ def check():
         elif phase == "wheel":
             # The drawn unit labels must contain real colored text, not clipped bitmaps.
             image = window.grab().toImage()
+            viewport = window.plots.graphics.viewport()
             assert window.plots.title_labels[0].width() > 50
             assert window.brand_logo.isVisibleTo(window), "Logo overflowed the toolbar"
             assert window.rect().contains(
@@ -136,8 +139,11 @@ def check():
                 <= 2
             ), "Logo was not aligned to the right edge"
             assert window.plots.plots[0].vb.width() >= 190, "Dock panels squeezed the plot"
+            right = window.plots.graphics.mapFromScene(
+                window.plots.plots[0].vb.sceneBoundingRect().topRight()
+            ).x()
+            assert viewport.width() - right >= 30, "The last clock label was clipped"
             ratio = window.devicePixelRatioF()
-            viewport = window.plots.graphics.viewport()
             for panel, axes in enumerate(window.plots.unit_axes[:3]):
                 for unit, axis in axes.items():
                     rect = window.plots.graphics.mapFromScene(
@@ -302,6 +308,98 @@ def check():
             assert len(clone.plots.unit_views[3]) == 4
             assert all((3, name) in clone.plots.curves for name in session.channels)
             clone.close()
+            # Configuring channels must never override an explicit visible-panel count.
+            for count in (1, 2, 4, 2):
+                window.count_combo.setCurrentIndex(count - 1)
+                window.channels.apply_plot_selection(0, selected)
+                window.refresh_plots()
+                assert window.count_combo.currentIndex() + 1 == count
+                assert sum(plot.isVisible() for plot in window.plots.plots) == count
+                assert all(
+                    not view.isVisible()
+                    for extras in window.plots._extras[count:]
+                    for _unit, view, _axis, _column in extras
+                )
+            assert window.channels.columnCount() == 2
+            assert window.channels.headerItem().text(1) == "Value"
+            dialog = PlotConfigurationDialog(
+                session, 1, ["ACC_X", "ACC_Y"], "Acceleration", window.plots.y_ranges[1], window
+            )
+            QTimer.singleShot(20, dialog._accept)
+            with patch(
+                "telemetry_viewer.gui.main_window.PlotConfigurationDialog", return_value=dialog
+            ):
+                window.configure_plot(1)
+            assert window.count_combo.currentIndex() == 1
+            assert window.plots.plots[1].isVisible() and not window.plots.plots[2].isVisible()
+            state["raw_before"] = session.channels["ACC_X"].samples.copy()
+            tools = SignalToolsDialog(session, window, source="ACC_X")
+            tools.cutoff.setValue(3)
+            tools.name.setText("CALC_ACC_FILTERED")
+            QTimer.singleShot(20, tools._accept)
+            with patch("telemetry_viewer.gui.main_window.SignalToolsDialog", return_value=tools):
+                window.signal_tools_action.trigger()
+            state["phase"] = "calculated"
+        elif phase == "calculated":
+            if window.calculation_thread is not None:
+                return
+            derived = session.channels["CALC_ACC_FILTERED"]
+            assert derived.group == "Calculated" and derived.calculation["cutoff_hz"] == 3
+            np.testing.assert_array_equal(session.channels["ACC_X"].samples, state["raw_before"])
+            item = window.channels.items[derived.name][0]
+            assert item.parent().text(0) == "Calculated"
+            assert item.checkState(0) == Qt.CheckState.Unchecked
+            window.channels.apply_plot_selection(0, [derived.name, "GYRO_Z", "GPS_SPEED_KMH"])
+            assert (0, derived.name) in window.plots.curves
+            assert window.count_combo.currentIndex() == 1
+            stats = StatisticsDialog(session, "time", (3, 5), window)
+            row = next(
+                stats.table.topLevelItem(i)
+                for i in range(stats.table.topLevelItemCount())
+                if stats.table.topLevelItem(i).text(0) == derived.name
+            )
+            assert int(row.text(2)) == 201
+            stats.scope.setCurrentIndex(1)
+            assert int(
+                stats.table.topLevelItem(stats.table.topLevelItemCount() - 1).text(2)
+            ) == len(session.nr)
+            QTimer.singleShot(20, stats.accept)
+            with patch("telemetry_viewer.gui.main_window.StatisticsDialog", return_value=stats):
+                window.statistics_action.trigger()
+            # Verify independent range rendering in the real offline Leaflet page.
+            window.map_widget.page.runJavaScript(
+                "routeRenderer.rangeTestRedraws=0;"
+                "const previous=routeRenderer._redraw;"
+                "routeRenderer._redraw=function(){this.rangeTestRedraws++;"
+                "return previous.apply(this,arguments);};"
+            )
+            window.plots.plots[0].setXRange(3, 11, padding=0)
+            state["phase"] = "map_time"
+        elif phase in ("map_time", "map_distance"):
+            state["phase"] = "map_query_pending"
+            mode = phase
+            window.map_widget.page.runJavaScript(
+                "JSON.stringify({bounds:visibleRange, count:rangeMarks.getLayers().length,"
+                "separate:rangeMarks.getLayers().every(p=>p._renderer!==routeRenderer),"
+                "redraws:routeRenderer.rangeTestRedraws,"
+                "bars:rangeMarks.getLayers().filter(p=>p.getLatLngs).map(p=>{"
+                "const ends=p.getLatLngs().map(q=>map.latLngToLayerPoint(q));"
+                "return ends[0].distanceTo(ends[1]);})})",
+                lambda value, mode=mode: verify_range(value, mode),
+            )
+        elif phase == "map_empty":
+            state["phase"] = "map_empty_pending"
+            window.map_widget.page.runJavaScript(
+                "JSON.stringify({bounds:visibleRange,count:rangeMarks.getLayers().length})",
+                verify_empty_range,
+            )
+        elif phase == "finish":
+            clone = MainWindow()
+            clone.pending_path = Path("synthetic-config-check").resolve()
+            clone.accept_session(session)
+            assert clone.count_combo.currentIndex() == 1
+            assert sum(plot.isVisible() for plot in clone.plots.plots) == 2
+            clone.close()
             print(
                 "PLOT_CONFIG_PASS "
                 + json.dumps(
@@ -310,6 +408,9 @@ def check():
                         "wheel": "X only",
                         "clock": "hh:mm:ss",
                         "duplicate_channels": True,
+                        "calculated": True,
+                        "panel_count_preserved": True,
+                        "map_range": ["time", "distance"],
                     }
                 ),
                 flush=True,
@@ -321,6 +422,35 @@ def check():
         import traceback
 
         fail(traceback.format_exc() + repr(exc))
+
+
+def verify_range(value, mode):
+    try:
+        value = json.loads(value)
+        assert value["bounds"]["start"]["row"] == 300, value
+        assert value["bounds"]["end"]["row"] == 1100, value
+        assert value["count"] == 4 and value["separate"], value
+        assert value["bars"] and all(abs(length - 28) < 2 for length in value["bars"]), value
+        if mode == "map_time":
+            assert value["redraws"] == 0, value
+            window.axis_combo.setCurrentText("Distance")
+            window.plots.plots[0].setXRange(36, 132, padding=0)
+            state["phase"] = "map_distance"
+        else:
+            assert window.count_combo.currentIndex() == 1
+            window.plots.plots[0].setXRange(100000, 100100, padding=0)
+            state["phase"] = "map_empty"
+    except Exception as exc:
+        fail(f"Map range check: {exc}: {value}")
+
+
+def verify_empty_range(value):
+    try:
+        value = json.loads(value)
+        assert value["bounds"] is None and value["count"] == 0, value
+        state["phase"] = "finish"
+    except Exception as exc:
+        fail(f"Empty map range check: {exc}: {value}")
 
 
 timer.timeout.connect(check)

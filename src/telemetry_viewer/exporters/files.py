@@ -73,10 +73,13 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                         "unit": session.channels[n].unit,
                         "source": session.channels[n].source,
                         "interpolation": session.channels[n].interpolation,
+                        "calculation": session.channels[n].calculation,
                     }
                     for n in names
                 },
-                "alignment": "Exact measurement times only; no synthesized channel values",
+                "alignment": (
+                    "Exact measurement times only; calculated channels are explicitly identified"
+                ),
             },
             indent=2,
         ),

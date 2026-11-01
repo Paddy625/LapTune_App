@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **49 passed**, including the optional private-log integration test.
+- `pytest -q`: **64 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -66,3 +66,15 @@ throughput or a hardware-independent frame-rate guarantee.
 
 GUI smoke tests, rendering checks and screenshot tools use temporary INI settings on all
 platforms, including Windows. Running them does not overwrite the user's saved plot layout.
+
+The signal/range update adds numerical checks for noise suppression on an uneven clock,
+causal step response, invalid/gap resets, unit conversion, exact-time vector/difference
+alignment, derivatives/integrals, cancellation, full-resolution statistics and CSV recipe
+provenance. Route tests cover temporal snapping, segment-aware tangents, no GPS, stationary
+fixes and distance plateaus.
+
+Both desktop and small-window Qt checks now exercise the real signal dialog and worker,
+Calculated tree category, choosing a filtered channel in a plot, statistics, removal of the
+assignment column and persistence of 1/2/4 visible plots without automatic expansion. Real
+Leaflet checks verify start/end rows in Time/Distance modes, fixed-size marker bars, a separate
+renderer and zero static-route redraws on plot-range changes. Out-of-session bounds clear marks.
