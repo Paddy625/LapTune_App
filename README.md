@@ -17,6 +17,7 @@ No backend service; raw logs stay on your computer.
   (EST)…** creates clearly described `EST_…` channels, with GPS-loss prediction, uncertainty,
   map comparison and separate estimated GPX export. Raw measurements retain their names/values.
   See [EST navigation, assumptions and use](docs/navigation.md).
+  Firmware developers: [logger acquisition and synchronization requirements](docs/embedded-logger-requirements.md).
 - Folder-first toolbar, a full-height LapTune wordmark and up to four linked PyQtGraph panels,
   per-plot channel configuration, solo mode,
   nearest recorded value readout, shared cursor and X-only wheel zoom/pan.
