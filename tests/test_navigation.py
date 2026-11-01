@@ -230,7 +230,7 @@ def test_no_imu_gap_is_bridged_and_est_gpx_has_separate_segments(navigation_data
     assert len(ET.parse(raw_path).findall(".//{*}trkpt")) == len(source.gps_fix_samples)
     csv_path = tmp_path / "out.csv"
     export_csv(session, csv_path, ["ACC_X", "EST_ACC_X"])
-    assert "EST_ACC_X [m/s²]" in csv_path.read_text().splitlines()[0]
+    assert "EST_ACC_X [m/s²]" in csv_path.read_text(encoding="utf-8").splitlines()[0]
 
 
 def test_original_est_named_channel_is_protected(navigation_data):

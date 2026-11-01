@@ -95,11 +95,13 @@ def verify_map(encoded):
             return_value=(str(csv_path), ""),
         ):
             window.export("csv")
-        with csv_path.open(newline="") as handle:
+        with csv_path.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
         assert len(rows) == len(session.nr)
         assert "EST_ACC_X [m/s²]" in rows[0] and rows[0]["EST_ACC_X [m/s²]"] == ""
-        metadata = json.loads(csv_path.with_suffix(".csv.metadata.json").read_text())
+        metadata = json.loads(
+            csv_path.with_suffix(".csv.metadata.json").read_text(encoding="utf-8")
+        )
         assert metadata["navigation"]["axes"] == "X rear, Y right, Z up; world East, North, Up"
         assert "rearward" in metadata["channels"]["EST_ACC_X"]["description"]
         with patch(
