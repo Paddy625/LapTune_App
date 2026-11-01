@@ -3,8 +3,8 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **80 passed**, including the optional private-log integration test.
-  Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
+- `pytest -q`: **92 passed**, including both optional private-log integration tests.
+  Public CI skips them when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
   local Leaflet route and marker, plot-to-map cursor and JavaScript-to-Python selection passed
@@ -116,3 +116,14 @@ and X/Y ranges during recoloring. Pure checks cover compact numeric formatting a
 channel timestamps during distance plateaus. The synthetic 186,400-sample/six-series benchmark
 with readouts records p95 cursor updates of 1.815 ms, steady painting 6.764 ms and painting
 including pan/zoom of 16.489 ms on this headless host; see benchmarks/cursor-readouts-rendering.json.
+
+New logger regressions cover approximately 5 Hz coordinate updates, independent altitude changes,
+clock/GPS loss before lock, in the middle and at the end, midnight, insufficient clock anchors,
+below-sea-level and zero altitude, invalid numbers, mixed-firmware folders, CSV metadata, GPX
+elevation and altitude filtering. An offline Qt check imports the new synthetic schema through
+the worker, selects altitude and speed in the real configuration dialog, verifies separate metre
+and km/h axes and missing-value readouts, and checks that GPS gaps split the Leaflet route.
+The new private sample retains all **18,654 rows** and **14,185 valid altitude readings**.
+Three empty-clock spans have explicit estimation diagnostics. Recorded clock backsteps still
+trigger the existing monotonic point corrections and associated GPS jump checks; raw input
+times and measurements remain unchanged. Neither private log is committed.

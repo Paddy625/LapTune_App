@@ -768,7 +768,8 @@ class MainWindow(QMainWindow):
             f"<p>{html.escape(s.metadata.time_correction)}. Invalid time retains rows. "
             "Speed uses last recorded value until the next row; gaps are reported. "
             "GPS jumps above 100 m/s are excluded. Coordinate gaps split the route.</p>"
-            f"<ul>{rows}</ul><p>Each channel has its own recorded time axis. "
+            f"<p>{html.escape(s.metadata.gps_detection)}.</p>"
+            f"<ul>{rows}</ul><p>Empty timestamps may use explicitly reported estimates. "
             "Row density is not a sensor's physical refresh rate; unchanged values "
             "alone cannot prove whether a new measurement arrived.</p>"
         )

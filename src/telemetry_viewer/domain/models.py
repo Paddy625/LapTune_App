@@ -47,7 +47,10 @@ class SessionMetadata:
     gyroscope_unit: str = "deg/s (assumed)"
     orientation: str = "Unspecified sensor axes"
     time_correction: str = "Point correction: max(raw elapsed, previous + 1 microsecond)"
-    gps_detection: str = "Changes in coordinates or speed; identical consecutive fixes undetectable"
+    gps_detection: str = (
+        "Changes in coordinates, speed or available MSL altitude; "
+        "no fixed refresh rate; identical consecutive fixes undetectable"
+    )
 
 
 @dataclass

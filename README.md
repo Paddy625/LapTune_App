@@ -29,8 +29,9 @@ No backend service; raw logs stay on your computer.
 **Validation status:** local source tests and offline GUI smoke cover both single-file and
 folder import. The initial Windows source tests, frozen EXE smoke and ZIP packaging passed in
 [GitHub Actions](https://github.com/Paddy625/LapTune_App/actions/runs/41229959076).
-For later changes, use the Actions run for the commit you download. The private LOG0023.TXT
-integration test is optional and excluded from Git. See [validation results](docs/validation.md).
+For later changes, use the Actions run for the commit you download. Private LOG0023.TXT and
+LOG0013.TXT integration tests are optional; the logs are excluded from Git.
+See [validation results](docs/validation.md).
 
 ## Windows PowerShell · VS Code
 
@@ -72,6 +73,29 @@ Folder imports use the same background worker and can be reopened from Recent fi
 For the optional real-data integration test,
 put the original file at `data/local/LOG0023.TXT`. That directory and TXT logs under `data/`
 are ignored by Git. Never add private logs using `git add -f`.
+
+New logger firmware can include **`GPS_ALT_MSL_M`**, altitude above mean sea level in metres.
+It appears under **GPS** in Channels and **Configure plot…**, and can be combined with speed,
+ACC or gyro signals; altitude uses its own `m` Y axis. It also supports the existing calculation
+and filtering tools. CSV exports retain its metre unit, and GPX adds `<ele>` only where a valid
+altitude was recorded. Negative and zero altitudes are valid. Old logs and folders containing
+both firmware formats remain supported; absent altitude stays missing.
+
+GPS changes are detected from coordinates, speed and available altitude, with no fixed refresh
+rate (including the newer approximately 5 Hz updates). Repeated logger rows are retained;
+identical GPS states cannot establish a new physical fix. Blank GPS readings remain invalid
+and split the route instead of connecting across loss of reception. Empty readings are reported
+as ranges, while malformed numeric values remain individual warnings.
+
+If the logger leaves both date and time empty before GPS lock or during reception loss, IMU
+rows are retained. Display times between two available clock readings are estimated by linear
+interpolation in acquisition order; leading/trailing gaps use the observed median row interval
+when enough timestamps exist. These are estimates, not additional recorded timestamps. The
+quality report and CSV metadata identify them, and `timestamp_raw` is unchanged. Without enough
+clock information the monotonic 1 µs fallback remains, with a warning. Nonempty malformed times,
+duplicate timestamps and backward clock steps retain the existing point-correction policy.
+GPS distance remains horizontal WGS84 distance; altitude does not silently change its definition.
+For optional local validation of the new sample, use `data/local/LOG0013.TXT`.
 
 Generate a larger, entirely synthetic demonstration with variable GPS refresh rates:
 

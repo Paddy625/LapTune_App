@@ -20,7 +20,10 @@ KNOWN = {
     "GPS_LAT": ("deg", "GPS"),
     "GPS_LON": ("deg", "GPS"),
     "GPS_SPEED_KMH": ("km/h", "GPS"),
+    "GPS_ALT_MSL_M": ("m", "GPS"),
 }
+# Older firmware does not record altitude; its absence is not a data-quality issue.
+NEW_OPTIONAL = {"GPS_ALT_MSL_M"}
 
 
 def filename_order(path: Path) -> tuple:
@@ -57,11 +60,24 @@ class LegacyTxtImporter:
                 progress(percent)
                 last_progress = percent
 
+        def flush_blank(name, blank_runs, source):
+            if name in blank_runs:
+                first, last, count = blank_runs.pop(name)
+                issues.append(
+                    QualityIssue(
+                        first,
+                        "missing_measurement",
+                        f"{name}: {count} empty readings through line {last}; retained invalid",
+                        source,
+                    )
+                )
+
         report(0)
         for source_path, size in zip(paths, sizes, strict=True):
             start_row = len(nr)
             consumed = 0
             source = source_path.name
+            blank_runs = {}
             try:
                 with source_path.open(encoding="utf-8-sig", newline="") as handle:
                     reader = csv.reader(handle, delimiter=";")
@@ -82,7 +98,7 @@ class LegacyTxtImporter:
                     for name in numeric:
                         if name not in values:
                             values[name] = [np.nan] * start_row
-                    for missing in sorted(KNOWN.keys() - set(header)):
+                    for missing in sorted(KNOWN.keys() - NEW_OPTIONAL - set(header)):
                         issues.append(
                             QualityIssue(
                                 1, "missing_channel", f"Optional column missing: {missing}", source
@@ -135,8 +151,15 @@ class LegacyTxtImporter:
                             if name not in positions:
                                 data.append(np.nan)
                                 continue
+                            text = row[positions[name]].strip()
+                            if not text:
+                                first, _last, count = blank_runs.get(name, (line, line, 0))
+                                blank_runs[name] = first, line, count + 1
+                                data.append(np.nan)
+                                continue
+                            flush_blank(name, blank_runs, source)
                             try:
-                                value = float(row[positions[name]])
+                                value = float(text)
                                 if not np.isfinite(value) or (
                                     name == "GPS_SPEED_KMH" and value < 0
                                 ):
@@ -152,6 +175,8 @@ class LegacyTxtImporter:
                                     )
                                 )
                             data.append(value)
+                    for name in list(blank_runs):
+                        flush_blank(name, blank_runs, source)
                 if len(nr) == start_row:
                     raise ImportErrorDetail("No usable data rows after the header")
             except InterruptedError:
@@ -191,8 +216,14 @@ class LegacyTxtImporter:
         nan = np.full(len(time), np.nan)
         speed = channels["GPS_SPEED_KMH"].samples if "GPS_SPEED_KMH" in channels else nan
         if "GPS_LAT" in channels and "GPS_LON" in channels:
+            altitude = channels.get("GPS_ALT_MSL_M")
             fixes, starts, gps, gps_issues = gps_distances(
-                channels["GPS_LAT"].samples, channels["GPS_LON"].samples, speed, time, row_indices
+                channels["GPS_LAT"].samples,
+                channels["GPS_LON"].samples,
+                speed,
+                time,
+                row_indices,
+                altitude=altitude.samples if altitude is not None else None,
             )
         else:
             fixes, starts = np.array([], dtype=np.int64), np.array([], dtype=bool)
@@ -210,7 +241,7 @@ class LegacyTxtImporter:
         if progress:
             progress(100)
         name = f"{path.name} ({len(paths)} files)" if path.is_dir() else path.name
-        return Session(
+        session = Session(
             name,
             np.arange(len(nr)),
             np.array(nr, dtype=np.int64),
@@ -226,3 +257,9 @@ class LegacyTxtImporter:
             source_files=sources,
             source_lines=np.array(lines, dtype=np.int64),
         )
+        if any(issue.code == "estimated_time" for issue in time_issues):
+            session.metadata.time_correction += (
+                "; empty timestamps interpolated between recorded times, edge gaps extrapolated "
+                "using the observed median row interval; estimates are not recorded clock values"
+            )
+        return session

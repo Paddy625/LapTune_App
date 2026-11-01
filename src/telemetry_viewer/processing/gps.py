@@ -13,7 +13,7 @@ def haversine_m(lat1, lon1, lat2, lon2):
     return 2 * EARTH_RADIUS_M * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
 
-def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0):
+def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0, altitude=None):
     """Extract observable GPS changes, rejecting implausible jumps and breaking gaps."""
     issues, fixes, starts = [], [], []
     distance = np.zeros(len(time), dtype=np.float64)
@@ -31,6 +31,8 @@ def gps_distances(lat, lon, speed, time, lines, max_speed_m_s=100.0):
             distance[i] = total
             continue
         state = (lat[i], lon[i], speed[i] if np.isfinite(speed[i]) else None)
+        if altitude is not None:
+            state += (altitude[i] if np.isfinite(altitude[i]) else None,)
         if state != previous_state:
             previous_state = state
             step = (

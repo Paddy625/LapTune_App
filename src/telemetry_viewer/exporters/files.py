@@ -107,6 +107,9 @@ def export_gpx(session: Session, path: Path) -> None:
             lat=str(session.channels["GPS_LAT"].samples[i]),
             lon=str(session.channels["GPS_LON"].samples[i]),
         )
+        altitude = session.channels.get("GPS_ALT_MSL_M")
+        if altitude is not None and altitude.valid[i] and np.isfinite(altitude.samples[i]):
+            ET.SubElement(point, f"{{{ns}}}ele").text = str(altitude.samples[i])
         if tz:
             try:
                 time = datetime.strptime(session.timestamp_raw[i], "%Y-%m-%d %H:%M:%S.%f")
