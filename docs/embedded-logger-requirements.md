@@ -54,6 +54,9 @@ Obecna aplikacja wybiera `GPS_FIX_ID` przed `GPS_ITOW_MS`, jeśli oba pola wyst�
 - `NR` zwiększać dla każdej pozyskanej próbki, również gdy później zostanie zgubiona przez kolejkę.
   Brakujące numery mają ujawniać utratę danych. Nie dodawać duplikatów IMU w celu wypełnienia luk.
 - Reset MCU rozpoczyna nową sesję z nowym identyfikatorem uruchomienia w metadanych.
+  Każdą sesję/uruchomienie zapisywać w osobnym folderze z własnym `SESSION.json` i zestawem TXT.
+  Użytkownik wybiera w aplikacji folder konkretnej sesji; zmiana mocowania IMU również rozpoczyna
+  nową sesję, ponieważ kalibracja zakłada stały obrót montażu w analizowanym zapisie.
 
 Filtr potrzebuje rzeczywistego `dt = (T_IMU_US[k] - T_IMU_US[k-1]) / 1e6`.
 Nie wymuszać w logu idealnego dt, jeśli urządzenie rzeczywiście próbkowało inaczej.
