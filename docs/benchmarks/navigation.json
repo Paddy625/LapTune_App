@@ -1,0 +1,42 @@
+{
+  "input": "Independent synthetic 80 s drive; 50 Hz IMU; 5 Hz GPS; 7 s GPS loss; nontrivial mounting; constant sensor biases; 0.15 m GPS axis noise",
+  "limitations": "Offline driving calibration uses the selected whole drive; no real-world accuracy or timing guarantee. Single-antenna mean-bank assumption. No RTS smoothing.",
+  "scenarios": [
+    {
+      "seed": 23,
+      "rows": 4001,
+      "compute_seconds": 0.6188,
+      "mounting_error_deg": 0.3025,
+      "raw_gps_horizontal_rmse_m": 0.2149,
+      "fused_at_gps_epochs_horizontal_rmse_m": 0.0895,
+      "whole_estimated_track_horizontal_rmse_m": 0.2529,
+      "seven_second_gps_loss_max_error_m": 1.5285,
+      "gps_loss_output_complete": true,
+      "raw_arrays_unchanged": true
+    },
+    {
+      "seed": 24,
+      "rows": 4001,
+      "compute_seconds": 0.6366,
+      "mounting_error_deg": 0.3737,
+      "raw_gps_horizontal_rmse_m": 0.2102,
+      "fused_at_gps_epochs_horizontal_rmse_m": 0.0774,
+      "whole_estimated_track_horizontal_rmse_m": 0.0831,
+      "seven_second_gps_loss_max_error_m": 0.221,
+      "gps_loss_output_complete": true,
+      "raw_arrays_unchanged": true
+    },
+    {
+      "seed": 25,
+      "rows": 4001,
+      "compute_seconds": 0.6331,
+      "mounting_error_deg": 0.4298,
+      "raw_gps_horizontal_rmse_m": 0.2068,
+      "fused_at_gps_epochs_horizontal_rmse_m": 0.0761,
+      "whole_estimated_track_horizontal_rmse_m": 0.1731,
+      "seven_second_gps_loss_max_error_m": 1.2319,
+      "gps_loss_output_complete": true,
+      "raw_arrays_unchanged": true
+    }
+  ]
+}

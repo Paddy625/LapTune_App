@@ -1,14 +1,19 @@
 """Qt-free data model. Channel samples retain their own measurement times."""
 
+from __future__ import annotations
+
 from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 FloatArray = NDArray[np.float64]
+
+if TYPE_CHECKING:
+    from telemetry_viewer.processing.navigation import NavigationResult
 
 
 @dataclass
@@ -38,6 +43,7 @@ class Channel:
     frequency_hz: float | None = None
     interpolation: Literal["none", "linear", "hold"] = "none"
     calculation: dict | None = None
+    description: str = ""
 
 
 @dataclass
@@ -70,6 +76,8 @@ class Session:
     distance_method: str = "speed"
     source_files: list[SourceFile] = field(default_factory=list)
     source_lines: NDArray[np.int64] | None = None
+    logger_fields: dict[str, list[str]] = field(default_factory=dict)
+    navigation: NavigationResult | None = None
 
     def source_for_sample(self, sample: int) -> SourceFile | None:
         index = bisect_right(self.source_files, sample, key=lambda source: source.start_row) - 1

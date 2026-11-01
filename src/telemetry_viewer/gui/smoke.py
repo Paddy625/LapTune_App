@@ -5,6 +5,7 @@ import time
 import traceback
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import QTimer
 
 
@@ -124,3 +125,86 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
 
     timer.timeout.connect(step)
     timer.start(150)
+
+
+def run_navigation_smoke(app, window, path: Path, result_path: Path | None = None):
+    """Exercise the actual packaged ESKF/numpy code and EST Leaflet layer, not just imports."""
+    from telemetry_viewer.processing.navigation import NavigationConfig
+
+    started = time.monotonic()
+    state = {"phase": "loading"}
+    timer = QTimer(window)
+
+    def finish(passed, detail=""):
+        data = {"passed": passed, "detail": detail}
+        if passed:
+            data["estimated_channels"] = len(window.session.navigation.channels)
+        if result_path:
+            result_path.write_text(json.dumps(data))
+        print(
+            "GUI_NAVIGATION_SMOKE_" + ("PASS" if passed else "FAIL") + " " + json.dumps(data),
+            flush=True,
+        )
+        timer.stop()
+        window.close()
+        app.exit(0 if passed else 1)
+
+    def fail(message):
+        finish(False, state["phase"] + ": " + str(message))
+
+    def verify_map(value):
+        try:
+            data = json.loads(value)
+            assert data["layers"] > 0 and data["row"] == state["row"]
+            finish(True)
+        except Exception:
+            fail(traceback.format_exc())
+
+    def step():
+        try:
+            if time.monotonic() - started > 40:
+                raise TimeoutError("Waiting for EST computation or map")
+            if state["phase"] == "loading":
+                if (
+                    window.session is None
+                    or window.thread is not None
+                    or not window.map_widget.is_ready
+                ):
+                    return
+                state["raw"] = {
+                    name: channel.samples.copy()
+                    for name, channel in window.session.channels.items()
+                }
+                state["phase"] = "estimating"
+                window.start_navigation(NavigationConfig())
+            elif state["phase"] == "estimating":
+                session = window.session
+                if session.navigation is None or window.calculation_thread is not None:
+                    return
+                for name, values in state["raw"].items():
+                    np.testing.assert_array_equal(session.channels[name].samples, values)
+                result = session.navigation
+                assert all(name.startswith("EST_") for name in result.channels)
+                first_gps = np.flatnonzero(session.channels["GPS_LAT"].valid)[0]
+                assert not result.channels["EST_LAT"].valid[:first_gps].any()
+                outage = np.flatnonzero(
+                    result.channels["EST_LAT"].valid & ~session.channels["GPS_LAT"].valid
+                )
+                assert len(outage), "Fixture must include an initialized GPS loss"
+                state["row"] = int(outage[len(outage) // 2])
+                window.set_cursor(state["row"])
+                window.map_widget.set_track_mode("EST")
+                state["phase"] = "map"
+                window.map_widget.page.runJavaScript(
+                    "JSON.stringify({layers:estimatedRoute.getLayers().length,row:estimatedRow})",
+                    verify_map,
+                )
+        except Exception:
+            fail(traceback.format_exc())
+
+    window.import_error = fail
+    window.calculation_error = fail
+    window.layer_combo.setCurrentText("Offline")
+    window.load_file(path)
+    timer.timeout.connect(step)
+    timer.start(100)

@@ -34,15 +34,22 @@ def isolated_settings():
 def main():
     parser = argparse.ArgumentParser(description="Local IMU/GPS telemetry analysis")
     parser.add_argument("file", nargs="?", type=Path, help="Logger TXT file or folder of TXT logs")
-    parser.add_argument(
+    diagnostics = parser.add_mutually_exclusive_group()
+    diagnostics.add_argument(
         "--smoke-test",
         type=Path,
         metavar="SYNTHETIC_LOG",
         help="Offline GUI/render/map self-check; exits nonzero on failure",
     )
+    diagnostics.add_argument(
+        "--smoke-navigation",
+        type=Path,
+        metavar="SYNTHETIC_LOG",
+        help="Offline EST calculation and map self-check; exits nonzero on failure",
+    )
     parser.add_argument("--smoke-result", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    preferences = isolated_settings() if args.smoke_test else None
+    preferences = isolated_settings() if args.smoke_test or args.smoke_navigation else None
     app = create_application()
     window = MainWindow()
     window.show()
@@ -50,6 +57,10 @@ def main():
         from telemetry_viewer.gui.smoke import run_smoke
 
         run_smoke(app, window, args.smoke_test, args.smoke_result)
+    elif args.smoke_navigation:
+        from telemetry_viewer.gui.smoke import run_navigation_smoke
+
+        run_navigation_smoke(app, window, args.smoke_navigation, args.smoke_result)
     elif args.file:
         window.open_later(args.file)
     # Keep references alive through Qt's event loop.

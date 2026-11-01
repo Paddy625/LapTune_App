@@ -3,8 +3,8 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **92 passed**, including both optional private-log integration tests.
-  Public CI skips them when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
+- `pytest -q`: **116 passed**, including optional private import/navigation integration tests.
+  Public CI skips four private cases when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
   local Leaflet route and marker, plot-to-map cursor and JavaScript-to-Python selection passed
@@ -127,3 +127,15 @@ The new private sample retains all **18,654 rows** and **14,185 valid altitude r
 Three empty-clock spans have explicit estimation diagnostics. Recorded clock backsteps still
 trigger the existing monotonic point corrections and associated GPS jump checks; raw input
 times and measurements remain unchanged. Neither private log is committed.
+
+EST navigation tests validate rear/right/up signs, full tilted-gravity compensation, SO(3) edge
+angles, driving-only mounting/bias recovery, straight constant-speed driving with changing grade,
+unobservable-motion rejection, independent hardware/legacy clocks, preserved recording gaps,
+hardware reset reinitialization, true identical new GPS epochs versus held values, innovation
+rejection/reacquisition, increasing outage uncertainty, no navigation before GPS initialization,
+no bridging of missing IMU, immutable raw channels, protected EST-name collisions, interruption,
+and separate raw/estimated CSV/GPX semantics. The Qt test exercises the wizard, worker, map, plots,
+exports and close cancellation. Three synthetic ground-truth scenarios and explicit accuracy limits
+are documented in [navigation.md](navigation.md) and benchmarks/navigation.json. Private samples
+also complete driving calibration/navigation locally; that establishes functionality, not true
+position accuracy. No stationary calibration or zero-velocity shortcut is used.

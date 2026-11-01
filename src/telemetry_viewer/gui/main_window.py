@@ -9,6 +9,7 @@ import numpy as np
 from PySide6.QtCore import QObject, QSettings, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -33,14 +34,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from telemetry_viewer.exporters.files import export_csv, export_gpx
+from telemetry_viewer.exporters.files import export_csv, export_estimated_gpx, export_gpx
 from telemetry_viewer.gui.channel_panel import ChannelPanel
+from telemetry_viewer.gui.navigation_dialog import NavigationDialog
 from telemetry_viewer.gui.plot_config import PlotConfigurationDialog
 from telemetry_viewer.gui.plot_panel import PlotPanel
 from telemetry_viewer.gui.signal_tools import SignalToolsDialog, StatisticsDialog
 from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
 from telemetry_viewer.processing.display import elapsed_clock
+from telemetry_viewer.processing.navigation import estimate_navigation
 from telemetry_viewer.processing.signals import calculate_signal
 
 
@@ -91,6 +94,34 @@ class CalculationWorker(QObject):
             channel = calculate_signal(self.channels, self.recipe, check_cancelled)
             check_cancelled()
             self.result.emit(channel)
+        except Exception as exc:
+            self.error.emit(str(exc))
+        finally:
+            self.finished.emit()
+
+
+class NavigationWorker(QObject):
+    progress = Signal(int)
+    result = Signal(object)
+    error = Signal(str)
+    finished = Signal()
+
+    def __init__(self, session, config):
+        super().__init__()
+        self.session, self.config = session, config
+
+    @Slot()
+    def run(self):
+        try:
+
+            def report(percent):
+                if QThread.currentThread().isInterruptionRequested():
+                    raise InterruptedError("Navigation cancelled")
+                self.progress.emit(percent)
+
+            result = estimate_navigation(self.session, self.config, report)
+            report(100)
+            self.result.emit(result)
         except Exception as exc:
             self.error.emit(str(exc))
         finally:
@@ -220,6 +251,7 @@ class MainWindow(QMainWindow):
         self.export_menu = QMenu("Export", self)
         self.export_menu.addAction("Selected channels to CSV…", lambda: self.export("csv"))
         self.export_menu.addAction("GPS route to GPX…", lambda: self.export("gpx"))
+        self.export_menu.addAction("EST trajectory to GPX…", lambda: self.export("est_gpx"))
         file_menu.addMenu(self.export_menu)
         file_menu.addSeparator()
         file_menu.addAction("Quit", self.close, QKeySequence.StandardKey.Quit)
@@ -232,6 +264,12 @@ class MainWindow(QMainWindow):
         session_menu.addAction("Data quality and distance report…", self.show_quality)
         self.signal_tools_action = QAction("Calculate / filter signals…", self)
         self.signal_tools_action.triggered.connect(self.show_signal_tools)
+        self.navigation_action = QAction("Estimate motion (EST)…", self)
+        self.navigation_action.triggered.connect(self.show_navigation)
+        session_menu.addAction(self.navigation_action)
+        session_menu.addAction(
+            "EST calibration and navigation report…", self.show_navigation_report
+        )
         self.statistics_action = QAction("Signal statistics…", self)
         self.statistics_action.triggered.connect(self.show_statistics)
         help_menu = self.menuBar().addMenu("&Help")
@@ -287,6 +325,14 @@ class MainWindow(QMainWindow):
         self.layer_combo.addItems(["Road", "Offline", "Satellite"])
         self.layer_combo.currentTextChanged.connect(self.layer_changed)
         self.map_controls.addWidget(self.layer_combo)
+        self.track_combo = QComboBox()
+        self.track_combo.addItems(["GPS + EST", "GPS", "EST"])
+        self.track_combo.setToolTip(
+            "Compare the recorded GPS route and the estimated EST trajectory"
+        )
+        self.track_combo.currentTextChanged.connect(self.map_widget.set_track_mode)
+        self.track_action = self.map_controls.addWidget(self.track_combo)
+        self.track_action.setVisible(False)
         self.map_controls.setMinimumWidth(self.map_controls.sizeHint().width())
         # A dedicated toolbar keeps branding visible even when analysis controls overflow.
         self.brand_toolbar = QToolBar("LapTune")
@@ -339,6 +385,12 @@ class MainWindow(QMainWindow):
         self.calculate_button.setMinimumHeight(38)
         self.calculate_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         footer.addWidget(self.calculate_button)
+        self.navigation_button = QToolButton()
+        self.navigation_button.setObjectName("estimate_motion")
+        self.navigation_button.setDefaultAction(self.navigation_action)
+        self.navigation_button.setMinimumHeight(32)
+        self.navigation_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        footer.addWidget(self.navigation_button)
         self.statistics_button = QToolButton()
         self.statistics_button.setObjectName("signal_statistics")
         self.statistics_button.setDefaultAction(self.statistics_action)
@@ -385,6 +437,7 @@ class MainWindow(QMainWindow):
         self.open_action.setEnabled(False)
         self.open_folder_action.setEnabled(False)
         self.signal_tools_action.setEnabled(False)
+        self.navigation_action.setEnabled(False)
         self.progress.setValue(0)
         self.progress.show()
         self.thread = QThread(self)
@@ -409,6 +462,7 @@ class MainWindow(QMainWindow):
         self.open_action.setEnabled(True)
         self.open_folder_action.setEnabled(True)
         self.signal_tools_action.setEnabled(True)
+        self.navigation_action.setEnabled(True)
         self.progress.hide()
         if self.closing:
             self.close()
@@ -417,6 +471,9 @@ class MainWindow(QMainWindow):
         self.session = session
         self.source_path = self.pending_path
         self.cursor_sample = 0
+        self.track_action.setVisible(False)
+        self.track_combo.setCurrentIndex(0)
+        self.map_widget.set_track_mode("GPS + EST")
         session.metadata.timezone = self.settings.value("timezone", "")
         session.metadata.orientation = self.settings.value("orientation", "Unspecified sensor axes")
         self.apply_units(
@@ -547,6 +604,7 @@ class MainWindow(QMainWindow):
         self.open_action.setEnabled(False)
         self.open_folder_action.setEnabled(False)
         self.signal_tools_action.setEnabled(False)
+        self.navigation_action.setEnabled(False)
         self.progress.setRange(0, 0)
         self.progress.show()
         self.calculation_thread = QThread(self)
@@ -582,10 +640,109 @@ class MainWindow(QMainWindow):
         self.open_action.setEnabled(True)
         self.open_folder_action.setEnabled(True)
         self.signal_tools_action.setEnabled(True)
+        self.navigation_action.setEnabled(True)
         self.progress.hide()
         self.progress.setRange(0, 100)
         if self.closing:
             self.close()
+
+    def show_navigation(self):
+        if self.session is None:
+            QMessageBox.information(self, "Open data first", "Open a logger file or folder first.")
+            return
+        if self.thread is not None or self.calculation_thread is not None:
+            return
+        bounds = tuple(self.plots.plots[0].vb.viewRange()[0])
+        dialog = NavigationDialog(self.session, self.axis_mode, bounds, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.start_navigation(dialog.configuration())
+
+    def start_navigation(self, config):
+        if self.session is None or self.thread is not None or self.calculation_thread is not None:
+            return
+        self.open_action.setEnabled(False)
+        self.open_folder_action.setEnabled(False)
+        self.signal_tools_action.setEnabled(False)
+        self.navigation_action.setEnabled(False)
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.show()
+        self.calculation_thread = QThread(self)
+        self.calculation_worker = NavigationWorker(self.session, config)
+        self.calculation_worker.moveToThread(self.calculation_thread)
+        self.calculation_thread.started.connect(self.calculation_worker.run)
+        self.calculation_worker.progress.connect(self.progress.setValue)
+        self.calculation_worker.result.connect(self.accept_navigation)
+        self.calculation_worker.error.connect(self.calculation_error)
+        self.calculation_worker.finished.connect(self.calculation_thread.quit)
+        self.calculation_worker.finished.connect(self.calculation_worker.deleteLater)
+        self.calculation_thread.finished.connect(self.calculation_finished)
+        self.calculation_thread.finished.connect(self.calculation_thread.deleteLater)
+        self.calculation_thread.start()
+
+    def accept_navigation(self, result):
+        if self.closing:
+            return
+        assignments = [
+            [name for name, panel, _ in self.channels.selection() if panel == p] for p in range(4)
+        ]
+        # Publish the complete result together; retain all raw channels.
+        previous = self.session.navigation
+        if previous is not None:
+            for name, channel in previous.channels.items():
+                if self.session.channels.get(name) is channel:
+                    del self.session.channels[name]
+        self.session.channels.update(result.channels)
+        self.session.navigation = result
+        self.channels.populate(self.session, assignments)
+        self.channels.scrollToItem(
+            self.channels.items["EST_LAT"][0].parent(), QAbstractItemView.ScrollHint.PositionAtTop
+        )
+        self.map_widget.set_estimated_route()
+        self.track_action.setVisible(True)
+        self.set_cursor(self.cursor_sample)
+        self.statusBar().showMessage(
+            f"Created {len(result.channels)} EST channels in Calculated · Session > EST report",
+            15000,
+        )
+
+    def show_navigation_report(self):
+        if self.session is None or self.session.navigation is None:
+            QMessageBox.information(self, "No EST results", "Choose Estimate motion (EST)… first.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("EST · calibration and navigation report")
+        dialog.resize(800, 650)
+        layout = QVBoxLayout(dialog)
+        report = QTextBrowser()
+        result = self.session.navigation.report
+        calibration = result["calibration"]
+        warnings = "".join(f"<li>{html.escape(warning)}</li>" for warning in result["warnings"])
+        report.setHtml(
+            "<h3>Estimated vehicle motion</h3>"
+            "<p>All results are EST channels in Calculated. Raw measurements are preserved.<br>"
+            "Vehicle axes: X rear, Y right, Z up.</p>"
+            f"<h3>Driving calibration</h3><p>{calibration['samples']} moving reference samples "
+            f"from {calibration['start_time_s']:.1f} to "
+            f"{calibration['end_time_s']:.1f} navigation seconds.<br>"
+            f"ACC fit residual: {calibration['acceleration_rms_m_s2']:.3f} m/s²<br>"
+            f"GYRO fit residual: {np.degrees(calibration['gyro_rms_rad_s']):.3f} °/s<br>"
+            f"Excitation ratio: {calibration['excitation_ratio']:.3f} "
+            "(small values mean weak calibration).</p>"
+            "<h3>Navigation</h3><p>Accepted new GPS positions: "
+            f"{result['accepted_position_updates']}<br>"
+            f"Rejected position updates: {result['rejected_position_updates']}<br>"
+            f"Initializations: {result['initializations']}<br>"
+            f"Rows with estimated/repaired time: {result['estimated_time_rows']}</p>"
+            f"<h3>Assumptions and confidence</h3><ul>{warnings}</ul>"
+            "<p>Position uncertainty is model based, not a guarantee of real accuracy. "
+            "Full calibration parameters and settings accompany CSV and EST GPX exports.</p>"
+        )
+        layout.addWidget(report)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
 
     def show_statistics(self):
         if self.session is None:
@@ -631,7 +788,7 @@ class MainWindow(QMainWindow):
 
     def on_map_position(self, lat, lon):
         if self.session is not None:
-            sample = self.session.sample_for_location(lat, lon, self.cursor_sample)
+            sample = self.map_widget.sample_for_location(lat, lon, self.cursor_sample)
             if sample is not None:
                 self.set_cursor(sample)
                 x = float(self.session.axis(self.axis_mode)[sample])
@@ -796,6 +953,10 @@ class MainWindow(QMainWindow):
     def export(self, kind):
         if self.session is None:
             return
+        if kind == "est_gpx" and self.session.navigation is None:
+            QMessageBox.information(self, "No EST results", "Choose Estimate motion (EST)… first.")
+            return
+        suffix = "gpx" if kind == "est_gpx" else kind
         names = list(dict.fromkeys(name for name, _, _ in self.channels.selection()))
         if kind == "csv" and not names:
             QMessageBox.information(
@@ -804,15 +965,18 @@ class MainWindow(QMainWindow):
             return
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export " + kind.upper(),
-            str(Path.home() / f"telemetry.{kind}"),
-            f"{kind.upper()} (*.{kind})",
+            "Export " + ("EST trajectory GPX" if kind == "est_gpx" else kind.upper()),
+            str(
+                Path.home()
+                / (f"telemetry-est.{suffix}" if kind == "est_gpx" else f"telemetry.{suffix}")
+            ),
+            f"{suffix.upper()} (*.{suffix})",
         )
         if not path:
             return
         target = Path(path)
         if not target.suffix:
-            target = target.with_suffix("." + kind)
+            target = target.with_suffix("." + suffix)
         if self.is_source_file(target) or self.is_source_file(
             target.with_suffix(target.suffix + ".metadata.json")
         ):
@@ -823,6 +987,8 @@ class MainWindow(QMainWindow):
         try:
             if kind == "csv":
                 export_csv(self.session, target, names)
+            elif kind == "est_gpx":
+                export_estimated_gpx(self.session, target)
             else:
                 export_gpx(self.session, target)
         except Exception as exc:

@@ -46,6 +46,7 @@ class PlotConfigurationDialog(QDialog):
             item.setCheckState(
                 0, Qt.CheckState.Checked if name in names else Qt.CheckState.Unchecked
             )
+            item.setToolTip(0, channel.description or channel.source)
             self.channel_items[name] = item
         self.tabs.addTab(self.channel_tree, "Channels")
         ranges_page = QWidget()

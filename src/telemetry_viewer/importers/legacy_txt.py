@@ -21,9 +21,25 @@ KNOWN = {
     "GPS_LON": ("deg", "GPS"),
     "GPS_SPEED_KMH": ("km/h", "GPS"),
     "GPS_ALT_MSL_M": ("m", "GPS"),
+    "T_IMU_US": ("µs", "Timing"),
+    "T_US": ("µs", "Timing"),
+    "IMU_T_US": ("µs", "Timing"),
+    "GPS_FIX_ID": ("count", "GPS"),
+    "GPS_ITOW_MS": ("ms", "GPS"),
+    "GPS_NEW": ("flag", "GPS"),
+    "GPS_VALID": ("flag", "GPS"),
 }
 # Older firmware does not record altitude; its absence is not a data-quality issue.
-NEW_OPTIONAL = {"GPS_ALT_MSL_M"}
+NEW_OPTIONAL = {
+    "GPS_ALT_MSL_M",
+    "T_IMU_US",
+    "T_US",
+    "IMU_T_US",
+    "GPS_FIX_ID",
+    "GPS_ITOW_MS",
+    "GPS_NEW",
+    "GPS_VALID",
+}
 
 
 def filename_order(path: Path) -> tuple:
@@ -49,6 +65,7 @@ class LegacyTxtImporter:
         paths = folder_logs(path) if path.is_dir() else [path]
         issues, raw, lines, nr, sources = [], [], [], [], []
         values: dict[str, list[float]] = {}
+        text_fields: dict[str, list[str]] = {}
         sizes = [p.stat().st_size for p in paths]
         total_size = max(sum(sizes), 1)
         completed, last_progress = 0, -1
@@ -94,7 +111,9 @@ class LegacyTxtImporter:
                     for required in ("NR", "DATA", "CZAS"):
                         if required not in header:
                             raise ImportErrorDetail(f"Line 1: missing required column {required}")
-                    numeric = [n for n in header if n not in ("NR", "DATA", "CZAS")]
+                    numeric = [n for n in header if n not in ("NR", "DATA", "CZAS", "GPS_STATE")]
+                    if "GPS_STATE" in header and "GPS_STATE" not in text_fields:
+                        text_fields["GPS_STATE"] = [""] * start_row
                     for name in numeric:
                         if name not in values:
                             values[name] = [np.nan] * start_row
@@ -147,6 +166,18 @@ class LegacyTxtImporter:
                         nr.append(number)
                         raw.append(row[positions["DATA"]] + " " + row[positions["CZAS"]])
                         lines.append(line)
+                        for name, data in text_fields.items():
+                            text = row[positions[name]].strip() if name in positions else ""
+                            data.append(text)
+                            if text and text.upper() not in ("N", "R", "I"):
+                                issues.append(
+                                    QualityIssue(
+                                        line,
+                                        "invalid_gps_state",
+                                        f"Unknown GPS_STATE: {text}",
+                                        source,
+                                    )
+                                )
                         for name, data in values.items():
                             if name not in positions:
                                 data.append(np.nan)
@@ -256,6 +287,7 @@ class LegacyTxtImporter:
             distance_method="speed" if has_speed else "gps",
             source_files=sources,
             source_lines=np.array(lines, dtype=np.int64),
+            logger_fields=text_fields,
         )
         if any(issue.code == "estimated_time" for issue in time_issues):
             session.metadata.time_correction += (

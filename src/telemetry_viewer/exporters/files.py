@@ -25,6 +25,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
         writer.writerow(
             ["row_index", "NR", "timestamp_raw", "elapsed_time_s [s]", "distance_m [m]"]
             + (["source_file", "source_line"] if session.source_files else [])
+            + list(session.logger_fields)
             + [f"{n} [{session.channels[n].unit}]" for n in names]
         )
         aligned = []
@@ -53,6 +54,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                     format(session.distance_m[i], ".9f"),
                 ]
                 + provenance
+                + [values[i] for values in session.logger_fields.values()]
                 + [float(a[i]) if np.isfinite(a[i]) else "" for a in aligned]
             )
     path.with_suffix(path.suffix + ".metadata.json").write_text(
@@ -74,12 +76,14 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                         "source": session.channels[n].source,
                         "interpolation": session.channels[n].interpolation,
                         "calculation": session.channels[n].calculation,
+                        "description": session.channels[n].description,
                     }
                     for n in names
                 },
                 "alignment": (
-                    "Exact measurement times only; calculated channels are explicitly identified"
+                    "Exact shared row times; calculated and EST channels are explicitly identified"
                 ),
+                "navigation": session.navigation.report if session.navigation is not None else None,
             },
             indent=2,
         ),
@@ -135,4 +139,50 @@ def export_gpx(session: Session, path: Path) -> None:
             ET.SubElement(ext, f"{{{tv}}}source_file").text = source.path.name
             if session.source_lines is not None:
                 ET.SubElement(ext, f"{{{tv}}}source_line").text = str(session.source_lines[i])
+    ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+
+
+def export_estimated_gpx(session: Session, path: Path) -> None:
+    """Separate, explicitly identified EST track. The raw-GPS exporter is unchanged."""
+    if session.navigation is None:
+        raise ValueError("Estimate vehicle motion first; this session has no EST trajectory")
+    result = session.navigation
+    lat, lon = result.channels["EST_LAT"], result.channels["EST_LON"]
+    rows = np.flatnonzero(lat.valid & lon.valid)
+    if not len(rows):
+        raise ValueError("No GPS-initialized EST positions to export")
+    ns, tv = "http://www.topografix.com/GPX/1/1", "https://telemetry-viewer.local/schema/1"
+    ET.register_namespace("", ns)
+    ET.register_namespace("tv", tv)
+    root = ET.Element(f"{{{ns}}}gpx", version="1.1", creator="LapTune EST")
+    track = ET.SubElement(root, f"{{{ns}}}trk")
+    ET.SubElement(track, f"{{{ns}}}name").text = session.filename + " · EST estimated trajectory"
+    ET.SubElement(track, f"{{{ns}}}desc").text = (
+        "Estimated IMU/GNSS trajectory, including dead reckoning. Not raw GPS measurements. "
+        "Uncertainty is model based. Vehicle axes X rear, Y right, Z up."
+    )
+    segment, previous = None, None
+    for row in rows:
+        if segment is None or result.segment_start[row] or previous is None or row != previous + 1:
+            segment = ET.SubElement(track, f"{{{ns}}}trkseg")
+        point = ET.SubElement(
+            segment, f"{{{ns}}}trkpt", lat=str(lat.samples[row]), lon=str(lon.samples[row])
+        )
+        altitude = result.channels["EST_ALT_MSL_M"]
+        if altitude.valid[row]:
+            ET.SubElement(point, f"{{{ns}}}ele").text = str(altitude.samples[row])
+        extension = ET.SubElement(point, f"{{{ns}}}extensions")
+        ET.SubElement(extension, f"{{{tv}}}row_index").text = str(row)
+        ET.SubElement(extension, f"{{{tv}}}timestamp_raw").text = session.timestamp_raw[row]
+        for name in ("EST_NAV_STATUS", "EST_POS_95_M", "EST_TIME_S", "EST_TIME_QUALITY"):
+            ET.SubElement(extension, f"{{{tv}}}{name}").text = str(
+                result.channels[name].samples[row]
+            )
+        source = session.source_for_sample(int(row))
+        if source is not None:
+            ET.SubElement(extension, f"{{{tv}}}source_file").text = source.path.name
+        previous = row
+    extensions = ET.SubElement(root, f"{{{ns}}}extensions")
+    ET.SubElement(extensions, f"{{{tv}}}EST_report").text = json.dumps(result.report)
+    # Keep naive/missing raw time explicit; no synthetic UTC times are manufactured.
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)

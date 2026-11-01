@@ -51,7 +51,9 @@ class ChannelPanel(QTreeWidget):
             color = self.custom_colors.get(name, COLORS[i % len(COLORS)])
             item.setForeground(0, QColor(color))
             item.setToolTip(
-                0, f"{channel.source}; recorded samples; no fixed update-rate assumption"
+                0,
+                (channel.description + "\n" if channel.description else "")
+                + f"{channel.source}; no fixed update-rate assumption",
             )
             self.items[name] = item, set(panels), color
         self.expandAll()
