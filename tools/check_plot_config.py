@@ -473,6 +473,12 @@ def check():
                 "JSON.stringify({bounds:visibleRange,count:rangeMarks.getLayers().length})",
                 verify_empty_range,
             )
+        elif phase == "marker_geometry":
+            state["phase"] = "marker_geometry_pending"
+            window.map_widget.page.runJavaScript(
+                Path(__file__).with_name("check_marker_geometry.js").read_text(),
+                verify_marker_geometry,
+            )
         elif phase == "finish":
             clone = MainWindow()
             clone.pending_path = Path("synthetic-config-check").resolve()
@@ -491,6 +497,7 @@ def check():
                         "calculated": True,
                         "panel_count_preserved": True,
                         "map_range": ["time", "distance"],
+                        "marker_geometry": "20 subpixel/reversal/endpoint/stationary zoom cases",
                     }
                 ),
                 flush=True,
@@ -528,9 +535,29 @@ def verify_empty_range(value):
     try:
         value = json.loads(value)
         assert value["bounds"] is None and value["count"] == 0, value
-        state["phase"] = "finish"
+        state["phase"] = "marker_geometry"
     except Exception as exc:
         fail(f"Empty map range check: {exc}: {value}")
+
+
+def verify_marker_geometry(value):
+    try:
+        value = json.loads(value)
+        assert "error" not in value, value
+        assert len(value["results"]) == 20, value
+        subpixel = [case for case in value["results"] if case["name"] == "subpixel"]
+        assert all(case["roundedSamePixel"] for case in subpixel), value
+        for case in value["results"]:
+            assert case["count"] == 2 and case["separate"], case
+            for bar in case["geometry"]:
+                assert abs(bar["length"] - 28) < 1e-5, case
+                if case["name"] == "stationary":
+                    assert bar["unknown"], case
+                else:
+                    assert not bar["unknown"] and bar["perpendicular"] < 1e-6, case
+        state["phase"] = "finish"
+    except Exception as exc:
+        fail(f"Marker geometry check: {exc}: {value}")
 
 
 timer.timeout.connect(check)

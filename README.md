@@ -217,7 +217,9 @@ and [rendering performance measurements](docs/performance.md).
 Green **start** and pink **end** ticks mark the X range currently visible on the plots, in
 both Time and Distance modes. They snap to the nearest accepted recorded GPS positions;
 tooltips show their time and row. Ticks stay perpendicular to the local recorded route as
-you zoom the map; a stationary point uses a dot. Endpoints inside a GPS gap are hidden.
+you zoom the map, including when adjacent fixes fall into the same display pixel. Markers
+always include a fixed-size tick. If an isolated/stationary fix provides no direction, the
+tick is vertical and its tooltip says that direction is unavailable. Endpoints inside a GPS gap are hidden.
 On distance plateaus, start/end use the first/last recorded instant. Plot panning does not
 refit the map or redraw the static route.
 

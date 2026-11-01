@@ -45,16 +45,21 @@ function drawVisibleRange() {
         const mark=visibleRange[edge];
         if(!mark) continue;
         const p=map.latLngToLayerPoint(mark.point);
-        const before=map.latLngToLayerPoint(mark.before), after=map.latLngToLayerPoint(mark.after);
-        const dx=after.x-before.x, dy=after.y-before.y, norm=Math.hypot(dx,dy);
-        const label='Visible '+edge+' · nearest recorded GPS · '+mark.time+' · row '+mark.row;
+        // Layer points are rounded to integer pixels. Project without rounding so
+        // nearby GPS fixes still provide a direction when the map is zoomed out.
+        const center=map.project(mark.point), before=map.project(mark.before), after=map.project(mark.after);
+        let direction=after.subtract(before);
+        if(direction.x===0 && direction.y===0) direction=after.subtract(center);
+        if(direction.x===0 && direction.y===0) direction=center.subtract(before);
+        const norm=Math.hypot(direction.x,direction.y);
+        const hasDirection=Number.isFinite(norm) && norm>0;
+        const offset=hasDirection?L.point(-direction.y/norm*14,direction.x/norm*14):L.point(0,14);
+        const label='Visible '+edge+' · nearest recorded GPS · '+mark.time+' · row '+mark.row+
+            (hasDirection?'':' · direction unavailable (stationary/isolated fix)');
         L.circleMarker(mark.point,{radius:3,color,fillColor:color,fillOpacity:1,weight:2,renderer:rangeRenderer})
             .bindTooltip(label).addTo(rangeMarks);
-        if(norm>0.01) {
-            const offset=L.point(-dy/norm*14,dx/norm*14);
-            const ends=[map.layerPointToLatLng(p.subtract(offset)),map.layerPointToLatLng(p.add(offset))];
-            L.polyline(ends,{color,weight:3,renderer:rangeRenderer}).bindTooltip(label).addTo(rangeMarks);
-        }
+        const ends=[map.layerPointToLatLng(p.subtract(offset)),map.layerPointToLatLng(p.add(offset))];
+        L.polyline(ends,{color,weight:3,renderer:rangeRenderer}).bindTooltip(label).addTo(rangeMarks);
     }
 }
 window.setVisibleRange = function(bounds) { visibleRange=bounds; drawVisibleRange(); };

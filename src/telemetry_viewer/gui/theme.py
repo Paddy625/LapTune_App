@@ -17,6 +17,7 @@ STYLE = """
 QMainWindow,QDialog { background: #111214; color: #f2f3f5; }
 QWidget { font-family: 'Segoe UI', 'DejaVu Sans'; font-size: 12px; }
 QMenuBar,QToolBar { background: #000000; color: #f2f3f5; border: 0; }
+QToolBar#plot_controls,QToolBar#map_controls { background: #111214; }
 QStatusBar { background: #202328; color: #f2f3f5; border: 0; }
 QMenuBar::item { padding: 4px 8px; }
 QToolBar { spacing: 7px; padding: 9px; }

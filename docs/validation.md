@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **71 passed**, including the optional private-log integration test.
+- `pytest -q`: **73 passed**, including the optional private-log integration test.
   Public CI will skip that test when `data/local/LOG0023.TXT` is absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -100,3 +100,11 @@ include the current phase and traceback for CI diagnostics.
 The control-layout update changes MainWindow placement only: existing callbacks, data processing,
 plot behavior, map behavior and theme remain intact. The GUI suite and regenerated synthetic
 screenshots were used to review the plot/map footers, menu actions and status-bar report access.
+
+The range-tick regression was reproduced in the actual Leaflet page: distinct GPS fixes
+rounded to the same layer pixel generated zero bars. Geometry checks now exercise 20 cases
+per desktop/small-window run: subpixel separation, U-turns, endpoints and stationary fixes
+at zoom levels 0, 2, 8, 14 and 19. Both 28-pixel bars remain present, use a separate renderer
+and are perpendicular when a route direction exists. Unknown directions retain a vertical
+tick with an explicit tooltip. Python regressions cover reversal chords and segment-boundary
+isolation. Only the plot/map footer backgrounds change color, matching the plot canvas.

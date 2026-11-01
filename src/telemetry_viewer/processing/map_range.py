@@ -37,11 +37,19 @@ class RouteRange:
             neighbor_indices.append(
                 neighbor if self.segments[neighbor] == self.segments[index] else index
             )
+        before, after = neighbor_indices
+        if np.array_equal(self.points[before], self.points[after]):
+            # At a reversal A -> B -> A the centered chord is zero despite motion.
+            # Prefer the outgoing leg, then the incoming one, within this segment.
+            if not np.array_equal(self.points[index], self.points[after]):
+                before = index
+            elif not np.array_equal(self.points[before], self.points[index]):
+                after = index
         row = int(self.rows[index])
         return {
             "point": self.points[index].tolist(),
-            "before": self.points[neighbor_indices[0]].tolist(),
-            "after": self.points[neighbor_indices[1]].tolist(),
+            "before": self.points[before].tolist(),
+            "after": self.points[after].tolist(),
             "row": row,
             "time": elapsed_clock(float(self.session.elapsed_time_s[row]), milliseconds=True),
         }

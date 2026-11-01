@@ -35,3 +35,27 @@ def test_no_gps_and_single_stationary_fix(log_file):
     session.gps_fix_samples = np.array([], dtype=int)
     session.gps_segment_start = np.array([], dtype=bool)
     assert RouteRange(session).locate(0, 1, "time") is None
+
+
+def test_reversal_uses_a_real_leg_when_neighbor_chord_cancels(log_file):
+    session = LegacyTxtImporter().load(log_file)
+    session.gps_fix_samples = np.array([0, 100, 200])
+    session.gps_segment_start = np.array([True, False, False])
+    session.channels["GPS_LAT"].samples[session.gps_fix_samples] = [0, 0.001, 0]
+    session.channels["GPS_LON"].samples[session.gps_fix_samples] = [0, 0.001, 0]
+    marker = RouteRange(session).marker(1)
+    assert marker["before"] == marker["point"] == [0.001, 0.001]
+    assert marker["after"] == [0, 0]
+
+
+def test_stationary_repeats_use_moving_neighbors_without_crossing_gaps(log_file):
+    session = LegacyTxtImporter().load(log_file)
+    session.gps_fix_samples = np.array([0, 100, 200, 300])
+    session.gps_segment_start = np.array([True, False, False, False])
+    session.channels["GPS_LAT"].samples[session.gps_fix_samples] = [0, 0.001, 0.001, 0]
+    session.channels["GPS_LON"].samples[session.gps_fix_samples] = [0, 0.001, 0.001, 0]
+    marker = RouteRange(session).marker(2)
+    assert marker["before"] != marker["after"]
+    session.gps_segment_start = np.array([True, True, False, True])
+    marker = RouteRange(session).marker(2)
+    assert marker["before"] == marker["after"] == marker["point"]

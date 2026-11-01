@@ -102,7 +102,8 @@ assignments. CSV export deduplicates selected channel names across plots. The pu
 helpers display.py and scales.py format elapsed durations and calculate valid data ranges.
 
 gui/theme.py defines the shared graphite/red/white control palette and stylesheet. Top menus
-and both toolbars use pure black to blend with the logo background. Plot
+and both top toolbars use pure black to blend with the logo background; plot/map control
+footers share the plot background. Plot
 backgrounds, headers, legends, series colors and cursors use the same palette constants.
 The local Leaflet page mirrors the theme for its route, cursor, controls and offline overlays;
 range-bound markers retain their distinct start/end colors.
@@ -130,4 +131,7 @@ snap X viewport endpoints to accepted temporal GPS fixes; plateau edges choose f
 instants, and GPS gaps do not create invented route segments. A 30 ms timer coalesces X-range
 updates, and unchanged snapped bounds do not send repeated JavaScript. Leaflet uses a separate
 SVG renderer for the two bounds so the route's cached canvas is retained. Markers are 28-pixel
-perpendicular ticks recalculated at map zoom/pan, with dots for stationary fixes.
+perpendicular ticks recalculated at map zoom/pan. Heading uses unrounded projected coordinates,
+so subpixel GPS steps retain their direction; U-turns use a real incoming/outgoing segment leg.
+When no direction exists in the segment, a vertical tick remains visible with an explanatory
+tooltip. Center dots still identify the exact recorded position but never replace the tick.
