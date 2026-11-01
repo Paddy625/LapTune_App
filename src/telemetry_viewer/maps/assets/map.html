@@ -2,10 +2,14 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Telemetry GPS</title><link rel="stylesheet" href="leaflet.css">
 <style>
-html,body,#map{height:100%;margin:0;background:#18232e;color:#e4edf5;font:12px sans-serif}
-#notice{position:absolute;z-index:1000;top:12px;left:52px;right:12px;background:#111d2be8;padding:9px;border-radius:5px;pointer-events:none}
-#range-legend{position:absolute;z-index:1000;bottom:24px;left:10px;background:#111d2be8;padding:6px;border-radius:4px;pointer-events:none}
-.leaflet-control-attribution{font-size:10px}
+html,body,#map{height:100%;margin:0;background:#181b1f;color:#f2f3f5;font:12px sans-serif}
+#notice{position:absolute;z-index:1000;top:12px;left:52px;right:12px;background:#111214e8;padding:9px;border-radius:5px;pointer-events:none}
+#range-legend{position:absolute;z-index:1000;bottom:24px;left:10px;background:#111214e8;padding:6px;border-radius:4px;pointer-events:none}
+.leaflet-bar a{background:#24282e;color:#fff;border-color:#444b55}
+.leaflet-bar a:hover{background:#363b43;color:#ff7889}
+.leaflet-control-attribution{font-size:10px;background:#202328dd;color:#ddd}
+.leaflet-control-attribution a{color:#ff7889}
+.leaflet-tooltip{background:#24282e;color:#fff;border-color:#444b55}
 </style></head><body><div id="map"></div><div id="notice">Connecting local GPS view…</div>
 <div id="range-legend"><span style="color:#8fdf75">━ start</span> · <span style="color:#ff7897">━ end</span> · visible plot range</div>
 <script src="leaflet.js"></script><script src="qrc:///qtwebchannel/qwebchannel.js"></script>

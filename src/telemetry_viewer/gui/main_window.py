@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -37,6 +38,7 @@ from telemetry_viewer.gui.channel_panel import ChannelPanel
 from telemetry_viewer.gui.plot_config import PlotConfigurationDialog
 from telemetry_viewer.gui.plot_panel import PlotPanel
 from telemetry_viewer.gui.signal_tools import SignalToolsDialog, StatisticsDialog
+from telemetry_viewer.gui.theme import SURFACE
 from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
 from telemetry_viewer.processing.display import elapsed_clock
@@ -140,8 +142,13 @@ class MainWindow(QMainWindow):
                     self.plots.manual_ranges[i][unit] = tuple(limits)
         self.setCentralWidget(self.plots)
         self.channels = ChannelPanel()
+        self.channel_content = QWidget()
+        self.channel_layout = QVBoxLayout(self.channel_content)
+        self.channel_layout.setContentsMargins(0, 0, 0, 0)
+        self.channel_layout.setSpacing(0)
+        self.channel_layout.addWidget(self.channels, 1)
         self.channel_dock = QDockWidget("CHANNELS", self)
-        self.channel_dock.setWidget(self.channels)
+        self.channel_dock.setWidget(self.channel_content)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.channel_dock)
         self.map_widget = MapWidget()
         self.map_dock = QDockWidget("GPS ROUTE · nearest recorded fix", self)
@@ -155,6 +162,7 @@ class MainWindow(QMainWindow):
         self.plots.layout_changed.connect(self.save_plot_layout)
         self.map_widget.location_selected.connect(self.on_map_position)
         self._build_actions()
+        self._build_channel_actions()
         self.range_timer = QTimer(self)
         self.range_timer.setSingleShot(True)
         self.range_timer.setInterval(30)
@@ -207,14 +215,13 @@ class MainWindow(QMainWindow):
         session_menu = self.menuBar().addMenu("&Session")
         session_menu.addAction("Metadata and map provider…", self.configure)
         session_menu.addAction("Data quality and distance report…", self.show_quality)
-        analysis_menu = self.menuBar().addMenu("&Analysis")
-        self.signal_tools_action = analysis_menu.addAction(
-            "Calculate / filter signals…", self.show_signal_tools
-        )
-        self.statistics_action = analysis_menu.addAction("Signal statistics…", self.show_statistics)
+        self.signal_tools_action = QAction("Calculate / filter signals…", self)
+        self.signal_tools_action.triggered.connect(self.show_signal_tools)
+        self.statistics_action = QAction("Signal statistics…", self)
+        self.statistics_action.triggered.connect(self.show_statistics)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("Controls and privacy", self.show_help)
-        toolbar = QToolBar("Analysis")
+        toolbar = QToolBar("Controls")
         self.analysis_toolbar = toolbar
         toolbar.setObjectName("analysis")
         toolbar.setMovable(False)
@@ -267,7 +274,7 @@ class MainWindow(QMainWindow):
         self.brand_toolbar.setFixedHeight(60)
         self.brand_toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.brand_toolbar.setStyleSheet(
-            "QToolBar {padding:0; margin:0; border:0; spacing:0; background:#172330;}"
+            f"QToolBar {{padding:0; margin:0; border:0; spacing:0; background:{SURFACE};}}"
         )
         self.brand_logo = QLabel()
         self.brand_logo.setObjectName("laptune_brand")
@@ -291,6 +298,31 @@ class MainWindow(QMainWindow):
         self.brand_toolbar.addWidget(brand_spacer)
         self.brand_toolbar.addWidget(self.brand_logo)
         self.addToolBar(self.brand_toolbar)
+
+    def _build_channel_actions(self):
+        self.analysis_footer = QFrame()
+        self.analysis_footer.setObjectName("analysis_footer")
+        footer = QVBoxLayout(self.analysis_footer)
+        footer.setContentsMargins(12, 12, 12, 12)
+        footer.setSpacing(8)
+        heading = QLabel("ANALYSIS")
+        heading.setObjectName("analysis_heading")
+        footer.addWidget(heading)
+        self.calculate_button = QToolButton()
+        self.calculate_button.setObjectName("calculate_signals")
+        self.calculate_button.setProperty("primary", True)
+        self.calculate_button.setDefaultAction(self.signal_tools_action)
+        self.calculate_button.setToolTip("Calculate or filter the selected channel")
+        self.calculate_button.setMinimumHeight(38)
+        self.calculate_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        footer.addWidget(self.calculate_button)
+        self.statistics_button = QToolButton()
+        self.statistics_button.setObjectName("signal_statistics")
+        self.statistics_button.setDefaultAction(self.statistics_action)
+        self.statistics_button.setMinimumHeight(32)
+        self.statistics_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        footer.addWidget(self.statistics_button)
+        self.channel_layout.addWidget(self.analysis_footer)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -468,10 +500,13 @@ class MainWindow(QMainWindow):
             return
         if self.thread is not None or self.calculation_thread is not None:
             return
+        if not isinstance(source, str) or source not in self.session.channels:
+            selected = self.channels.currentItem()
+            source = selected.data(0, Qt.ItemDataRole.UserRole) if selected is not None else ""
         dialog = SignalToolsDialog(
             self.session,
             self,
-            source=source if isinstance(source, str) else "",
+            source=source or "",
             mode=self.axis_mode,
             bounds=tuple(self.plots.plots[0].vb.viewRange()[0]),
         )
@@ -787,8 +822,8 @@ class MainWindow(QMainWindow):
             "A channel can appear in several plots. Each distinct unit gets its own Y scale. "
             "Time ticks use hh:mm:ss. Layouts and Y limits are saved locally. "
             "Channel context menu: solo/hide all. Panels share X range. "
-            "Analysis > Calculate / filter signals creates channels in Calculated. "
-            "Analysis > Signal statistics uses full-resolution samples "
+            "Calculate / filter signals at the bottom of Channels creates channels in Calculated. "
+            "Signal statistics there uses full-resolution samples "
             "in the visible range or session. "
             "Green/pink map ticks show the visible X range's first/last recorded GPS positions. "
             "Distance plateaus preserve the active time where possible.\n\n"

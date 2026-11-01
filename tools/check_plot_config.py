@@ -126,6 +126,19 @@ def check():
             image = window.grab().toImage()
             viewport = window.plots.graphics.viewport()
             assert window.plots.title_labels[0].width() > 50
+            assert all(
+                item.data(0, Qt.ItemDataRole.CheckStateRole) is None
+                and not (item.flags() & Qt.ItemFlag.ItemIsUserCheckable)
+                for item, _panels, _color in window.channels.items.values()
+            ), "Channel names must not have checkbox indicators"
+            assert all(
+                action.text().replace("&", "") != "Analysis"
+                for action in window.menuBar().actions()
+            )
+            assert window.analysis_footer.y() > window.channels.geometry().bottom()
+            assert window.channel_content.height() - window.analysis_footer.geometry().bottom() <= 1
+            assert window.calculate_button.defaultAction() is window.signal_tools_action
+            assert window.statistics_button.defaultAction() is window.statistics_action
             assert window.brand_logo.isVisibleTo(window), "Logo overflowed the toolbar"
             assert window.rect().contains(
                 window.brand_logo.mapTo(window, window.brand_logo.rect().bottomRight())
@@ -257,11 +270,13 @@ def check():
             extra.mouseDragEvent(Drag())
             assert tuple(window.plots.plots[0].vb.viewRange()[0]) != x_before_drag
             assert y_snapshot() == state["y_before"]
-            # A channel checkbox is not an auto-range command; existing Y limits stay fixed.
-            item = window.channels.items["ACC_Y"][0]
-            item.setCheckState(0, Qt.CheckState.Unchecked)
+            # Changing a plot's channel selection must leave its existing Y limits fixed.
+            acceleration = [name for name, panel, _ in window.channels.selection() if panel == 1]
+            window.channels.apply_plot_selection(
+                1, [name for name in acceleration if name != "ACC_Y"]
+            )
             assert y_snapshot() == state["y_before"]
-            item.setCheckState(0, Qt.CheckState.Checked)
+            window.channels.apply_plot_selection(1, acceleration)
             assert y_snapshot() == state["y_before"]
             window.plots.fit_all()
             assert y_snapshot() == state["y_before"], "Fit X changed Y"
@@ -358,8 +373,12 @@ def check():
             tools.cutoff.setValue(3)
             tools.name.setText("CALC_ACC_FILTERED")
             QTimer.singleShot(20, tools._accept)
-            with patch("telemetry_viewer.gui.main_window.SignalToolsDialog", return_value=tools):
-                window.signal_tools_action.trigger()
+            window.channels.setCurrentItem(window.channels.items["ACC_X"][0])
+            with patch(
+                "telemetry_viewer.gui.main_window.SignalToolsDialog", return_value=tools
+            ) as factory:
+                window.calculate_button.click()
+                assert factory.call_args.kwargs["source"] == "ACC_X"
             state["phase"] = "calculated"
         elif phase == "calculated":
             if window.calculation_thread is not None:
@@ -369,7 +388,10 @@ def check():
             np.testing.assert_array_equal(session.channels["ACC_X"].samples, state["raw_before"])
             item = window.channels.items[derived.name][0]
             assert item.parent().text(0) == "Calculated"
-            assert item.checkState(0) == Qt.CheckState.Unchecked
+            assert item.data(0, Qt.ItemDataRole.CheckStateRole) is None
+            assert not any(
+                name == derived.name for name, _panel, _color in window.channels.selection()
+            )
             window.channels.apply_plot_selection(0, [derived.name, "GYRO_Z", "GPS_SPEED_KMH"])
             assert (0, derived.name) in window.plots.curves
             assert window.count_combo.currentIndex() == 1
@@ -386,7 +408,7 @@ def check():
             ) == len(session.nr)
             QTimer.singleShot(20, stats.accept)
             with patch("telemetry_viewer.gui.main_window.StatisticsDialog", return_value=stats):
-                window.statistics_action.trigger()
+                window.statistics_button.click()
             window.plots.plots[0].setXRange(3, 5, padding=0)
 
             def center_dialog(*args, **kwargs):
@@ -402,7 +424,7 @@ def check():
             with patch(
                 "telemetry_viewer.gui.main_window.SignalToolsDialog", side_effect=center_dialog
             ):
-                window.signal_tools_action.trigger()
+                window.calculate_button.click()
             state["phase"] = "centered"
         elif phase == "centered":
             if window.calculation_thread is not None:

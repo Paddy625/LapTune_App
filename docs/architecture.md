@@ -87,12 +87,20 @@ based on the full hh:mm:ss text width and enough margin for edge labels. This av
 entire grid on cursor movement. The synthetic mixed-axis benchmark is recorded in benchmarks/.
 
 PlotConfigurationDialog edits titles, channel selection and per-unit bounds atomically. The
-Channels panel lists names/values only; assignments are edited per plot. Refresh never expands
+Channels panel lists names/values without checkboxes; assignment sets are independent of tree
+item state and are edited per plot. A fixed footer below the scrolling tree owns the calculation
+and statistics buttons through shared QActions, including calculation busy-state changes.
+The calculation button prefills the selected source. Refresh never expands
 the visible count to include hidden assignments, and recreated auxiliary views respect visibility.
 QSettings key plot_layout_v2 stores count, titles, channel names and explicit bounds,
 never measurement arrays. Metadata changes preserve those
 assignments. CSV export deduplicates selected channel names across plots. The pure processing
 helpers display.py and scales.py format elapsed durations and calculate valid data ranges.
+
+gui/theme.py defines the shared graphite/red/white control palette and stylesheet. Plot
+backgrounds, headers, legends, series colors and cursors use the same palette constants.
+The local Leaflet page mirrors the theme for its route, cursor, controls and offline overlays;
+range-bound markers retain their distinct start/end colors.
 
 ## Derived signals and viewport map bounds
 

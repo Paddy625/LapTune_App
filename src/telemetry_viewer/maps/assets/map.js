@@ -22,9 +22,9 @@ window.setRoute = function(segments) {
     route=L.featureGroup();
     for(const segment of segments) {
         if(segment.length === 1) {
-            L.circleMarker(segment[0],{radius:4,color:'#39c9bc',renderer:routeRenderer}).addTo(route);
+            L.circleMarker(segment[0],{radius:4,color:'#ff1631',renderer:routeRenderer}).addTo(route);
         } else {
-            L.polyline(segment,{color:'#39c9bc',weight:4,renderer:routeRenderer}).addTo(route);
+            L.polyline(segment,{color:'#ff1631',weight:4,renderer:routeRenderer}).addTo(route);
         }
     }
     route.addTo(map);
@@ -34,7 +34,7 @@ window.setRoute = function(segments) {
 };
 window.setMarker = function(lat, lon, row) {
     markerRow = row;
-    if(!marker) marker=L.circleMarker([lat,lon],{radius:7,color:'#ffffff',weight:2,fillColor:'#ffb65a',fillOpacity:1,renderer:markerRenderer}).addTo(map);
+    if(!marker) marker=L.circleMarker([lat,lon],{radius:7,color:'#ff1631',weight:3,fillColor:'#ffffff',fillOpacity:1,renderer:markerRenderer}).addTo(map);
     else marker.setLatLng([lat,lon]);
     marker.bindTooltip('Nearest recorded GPS change · row '+row);
 };

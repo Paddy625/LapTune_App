@@ -17,10 +17,11 @@ from PySide6.QtWidgets import (
 )
 
 from telemetry_viewer.domain.models import Session
+from telemetry_viewer.gui.theme import BACKGROUND, CURSOR, MUTED, SERIES_COLORS, SURFACE, TEXT
 from telemetry_viewer.processing.display import elapsed_clock
 from telemetry_viewer.processing.scales import channel_unit, full_y_range
 
-COLORS = ["#42d4c3", "#ffa65c", "#a895f8", "#6bbcf7", "#ff7897", "#d2dc73", "#f6ce77"]
+COLORS = SERIES_COLORS
 
 
 class CachedAxis(pg.AxisItem):
@@ -163,7 +164,7 @@ class PlotPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        pg.setConfigOptions(antialias=False, background="#101a25", foreground="#9eafc2")
+        pg.setConfigOptions(antialias=False, background=BACKGROUND, foreground=MUTED)
         self.session: Session | None = None
         self.mode = "time"
         self.curves, self.proxies = {}, []
@@ -195,7 +196,7 @@ class PlotPanel(QWidget):
             menu.addAction("Fit X to session", self.fit_all)
             self.options_menus.append(menu)
             header = QWidget()
-            header.setStyleSheet("background: #172330;")
+            header.setStyleSheet(f"background: {SURFACE};")
             header_layout = QHBoxLayout(header)
             header_layout.setContentsMargins(8, 0, 4, 0)
             label = QLabel(self.titles[i])
@@ -232,7 +233,7 @@ class PlotPanel(QWidget):
             plot.showGrid(x=True, y=False, alpha=0.12)
             # Keep horizontal grid rendering separate from Y labels. Its bitmap can
             # be cached safely; cursor paints then need not replay vertical-axis text.
-            grid = pg.GridItem(pen=pg.mkPen((144, 172, 196, 35)), textPen=None)
+            grid = pg.GridItem(pen=pg.mkPen((154, 160, 169, 35)), textPen=None)
             grid.setTickSpacing(x=[1e100], y=[None, None])
             grid.setZValue(-20)
             grid.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
@@ -243,9 +244,13 @@ class PlotPanel(QWidget):
             self._style_axis(axis)
             axis.enableAutoSIPrefix(False)
             axis.setStyle(hideOverlappingLabels=False)
-            plot.addLegend(offset=(10, 5), labelTextColor="#d5e1ef")
+            plot.addLegend(offset=(10, 5), labelTextColor=TEXT)
             plot.setClipToView(True)
-            cursor = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#f9cf75", width=1))
+            cursor = pg.InfiniteLine(
+                angle=90,
+                movable=False,
+                pen=pg.mkPen(CURSOR, width=1, style=Qt.PenStyle.DashLine),
+            )
             cursor.setZValue(1000)
             plot.addItem(cursor, ignoreBounds=True)
             self.axes.append(axis)
@@ -349,7 +354,11 @@ class PlotPanel(QWidget):
                 axis.linkToView(view)
                 view.setXLink(plot.vb)
                 self._extras[panel].append((unit, view, axis, column))
-                cursor = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#f9cf75", width=1))
+                cursor = pg.InfiniteLine(
+                    angle=90,
+                    movable=False,
+                    pen=pg.mkPen(CURSOR, width=1, style=Qt.PenStyle.DashLine),
+                )
                 cursor.setZValue(1000)
                 view.addItem(cursor, ignoreBounds=True)
                 self._aux_cursors[panel].append(cursor)

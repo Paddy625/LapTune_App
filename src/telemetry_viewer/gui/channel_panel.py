@@ -26,7 +26,6 @@ class ChannelPanel(QTreeWidget):
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.items = {}
         self.session = None
-        self.itemChanged.connect(self._item_changed)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._menu)
 
@@ -46,7 +45,7 @@ class ChannelPanel(QTreeWidget):
             panels = [default_panel] if selected else []
             if assignments is not None:
                 panels = [p for p, names in enumerate(assignments) if name in names]
-            item.setCheckState(0, Qt.CheckState.Checked if panels else Qt.CheckState.Unchecked)
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
             color = COLORS[i % len(COLORS)]
             item.setForeground(0, QColor(color))
             item.setToolTip(
@@ -57,35 +56,19 @@ class ChannelPanel(QTreeWidget):
         self.blockSignals(False)
         self.selection_updated.emit()
 
-    def _item_changed(self, item, column):
-        if column != 0:
-            return
-        name = item.data(0, Qt.ItemDataRole.UserRole)
-        if name not in self.items:
-            return
-        panels = self.items[name][1]
-        if item.checkState(0) == Qt.CheckState.Checked and not panels:
-            channel = self.session.channels[name]
-            panels.add({"GPS": 0, "Acceleration": 1, "Gyroscope": 2}.get(channel.group, 3))
-        self.selection_updated.emit()
-
     def selection(self):
         return [
             (name, panel, color)
-            for name, (item, panels, color) in self.items.items()
-            if item.checkState(0) == Qt.CheckState.Checked
+            for name, (_item, panels, color) in self.items.items()
             for panel in sorted(panels)
         ]
 
     def apply_plot_selection(self, panel, names):
         self.blockSignals(True)
-        for name, (item, panels, _color) in self.items.items():
-            if item.checkState(0) != Qt.CheckState.Checked:
-                panels.clear()
+        for name, (_item, panels, _color) in self.items.items():
             panels.discard(panel)
             if name in names:
                 panels.add(panel)
-            item.setCheckState(0, Qt.CheckState.Checked if panels else Qt.CheckState.Unchecked)
         self.blockSignals(False)
         self.selection_updated.emit()
 
@@ -117,15 +100,9 @@ class ChannelPanel(QTreeWidget):
             self.calculate_requested.emit(target.data(0, Qt.ItemDataRole.UserRole))
             return
         if chosen in (only, none):
-            self.blockSignals(True)
-            for item, _, _ in self.items.values():
-                item.setCheckState(
-                    0,
-                    Qt.CheckState.Checked
-                    if chosen == only and item is target
-                    else Qt.CheckState.Unchecked,
-                )
-            self.blockSignals(False)
+            for item, panels, _ in self.items.values():
+                if chosen == none or item is not target:
+                    panels.clear()
             if chosen == only:
                 name = target.data(0, Qt.ItemDataRole.UserRole)
                 panels = self.items[name][1]

@@ -14,7 +14,7 @@ No backend service; raw logs stay on your computer.
 - Generic numeric channels, individual channel time arrays, validity and source metadata.
   No fixed IMU/GPS refresh frequency is assumed. An unknown numeric column appears automatically.
 - Folder-first toolbar, a full-height LapTune wordmark and up to four linked PyQtGraph panels,
-  channel checkboxes/panel assignment, solo mode,
+  per-plot channel configuration, solo mode,
   nearest recorded value readout, shared cursor and X-only wheel zoom/pan.
 - Per-plot channel/range editor, independent Y axes for each unit, duplicate channel assignments
   across plots and locally saved layouts. Time ticks use elapsed `hh:mm:ss`.
@@ -119,7 +119,7 @@ This is a portable **onedir** build, not a standalone onefile EXE.
 
 ## Controls and data interpretation
 
-- Channels lists measurements and cursor values; checkboxes show/hide assigned signals.
+- Channels lists measurements and cursor values without checkboxes.
   Choose channels for each plot through **Configure plot…**; right-click a channel to
   calculate/filter it or solo/hide all. A channel can appear in several plots.
 - **Open folder…** is first; **Open file…** opens an individual log. The LapTune wordmark
@@ -167,7 +167,9 @@ start at `00:00:00` and do not wrap after 24 hours; cursor readout retains milli
 
 ### Calculate, filter and analyze signals
 
-Use **Analysis → Calculate / filter signals…** (also available by right-clicking a channel).
+Use **Calculate / filter signals…** in the **ANALYSIS** section at the bottom of the left
+Channels panel (also available by right-clicking a channel). Selecting a channel in the list
+prefills that source in the calculation dialog. The footer stays visible while the list scrolls.
 Choose a source, operation and a unique result name. Results appear in the **Calculated**
 category; add them to any plot through **Configure plot…**. Sources are preserved, and
 calculated channels can feed further calculations. Computation runs in a background worker.
@@ -197,7 +199,7 @@ Multi-source calculations use shared exact timestamps, without filling missing m
 Integrals restart at zero per valid segment. Calculated channels belong to the loaded session;
 export selected channels to CSV to retain results and their parameters in the metadata JSON.
 
-**Analysis → Signal statistics…** reports count, min/max, mean, RMS, standard deviation and
+**Signal statistics…** in the same footer reports count, min/max, mean, RMS, standard deviation and
 peak-to-peak values for the visible X range or entire session, using valid full-resolution
 source/calculated samples.
 

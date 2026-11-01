@@ -85,3 +85,9 @@ The desktop/small-window GUI checks verify hidden Source B/C fields and labels f
 operations, the correct B/C rows for difference/vector operations, and a real background DC
 calculation calibrated from the viewport. Time and Distance views select the same reference
 interval, and two visible plots remain selected after publication of the centered channel.
+
+The LapTune presentation update keeps the 71-test suite. Existing desktop/small-window checks
+now verify checkbox-free channel items, unchanged plot assignments, a bottom-pinned analysis
+footer and actual calculation/statistics button actions, including selected-source prefill.
+Screenshots were regenerated from synthetic data to inspect graphite controls, red accents,
+red/white traces, map styling and full-height branding together.
