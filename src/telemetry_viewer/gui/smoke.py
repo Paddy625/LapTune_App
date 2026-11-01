@@ -2,6 +2,7 @@
 
 import json
 import time
+import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -15,6 +16,7 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
     timer = QTimer(window)
 
     def fail(message):
+        message = f"{state['phase']}: {message}"
         if result_path:
             result_path.write_text(json.dumps({"passed": False, "error": message}))
         print("GUI_SMOKE_FAIL " + message, flush=True)
@@ -22,16 +24,28 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
         window.close()
         app.exit(1)
 
+    def map_click_received(_lat, _lon):
+        if state["phase"] == "waiting_map_click":
+            # MainWindow's earlier connection has already applied the cursor change.
+            if window.cursor_sample != 0:
+                fail(f"Map click selected unexpected row {window.cursor_sample}")
+                return
+            state["phase"] = "map_clicked"
+
+    window.map_widget.location_selected.connect(map_click_received)
+
     def verify_js(value):
         try:
             value = json.loads(value)
             assert value["ready"] and value["routeLayers"] > 0
             assert value["markerRow"] == window.session.fix_for_sample(window.cursor_sample)
             assert value["notice"].startswith("Offline")
+            state["phase"] = "waiting_map_click"
             window.map_widget.page.runJavaScript(
-                "bridge.locationClicked(0,0)"  # synthetic fixture starts at equator/prime meridian
+                # Exercise delayed WebChannel delivery on both source and frozen builds.
+                # The synthetic fixture starts at the equator/prime meridian.
+                "setTimeout(()=>bridge.locationClicked(0,0),400)"
             )
-            state["phase"] = "map_clicked"
         except Exception as exc:
             fail(f"Map bridge/render check: {exc}: {value}")
 
@@ -105,8 +119,8 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
                 timer.stop()
                 window.close()
                 app.exit(0)
-        except Exception as exc:
-            fail(repr(exc))
+        except Exception:
+            fail(traceback.format_exc())
 
     timer.timeout.connect(step)
     timer.start(150)

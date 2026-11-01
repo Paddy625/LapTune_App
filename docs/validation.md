@@ -91,3 +91,8 @@ now verify checkbox-free channel items, unchanged plot assignments, a bottom-pin
 footer and actual calculation/statistics button actions, including selected-source prefill.
 Screenshots were regenerated from synthetic data to inspect graphite controls, red accents,
 red/white traces, map styling and full-height branding together.
+
+GUI smoke waits for the actual WebChannel map-click signal before checking the cursor.
+The synthetic click is delayed by 400 ms to exercise asynchronous delivery beyond the
+150 ms polling interval in both source tests and the frozen Windows executable. Failures
+include the current phase and traceback for CI diagnostics.
