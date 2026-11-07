@@ -1,6 +1,6 @@
 # Wymagania dla firmware loggera · LapTune
 
-Stan aplikacji: implementacja EST/ESKF w `be47d06`. Sprzęt zadeklarowany: LSM6DS3 oraz u-blox NEO-6.
+Stan aplikacji: implementacja EST/ESKF v2, układ pojazdu FLU. Sprzęt: LSM6DS3 oraz u-blox NEO-6.
 Dokument określa wymagania projektu; konkretne warianty układów, piny i możliwości ich firmware
 programista ma potwierdzić na urządzeniu. Kalibracja użytkowa odbywa się podczas jazdy.
 
@@ -153,7 +153,7 @@ Zachować ACC w g z grawitacją oraz GYRO w °/s. Do m/s² przeliczamy przez 9,8
 Nie normalizować wektora ACC do 1 g, nie usuwać średniej, nie wykonywać niejawnego zerowania przy
 starcie i nie obracać danych do układu pojazdu. Autozerowanie podczas ruchu usunęłoby rzeczywisty
 sygnał. Logować osie czujnika, opisać ich orientację względem PCB; układ docelowy aplikacji to
-X do tyłu, Y w prawo, Z do góry. Kalibracja montażu i biasu pozostaje po stronie aplikacji.
+X do przodu, Y w lewo, Z do góry. Kalibracja montażu i biasu pozostaje po stronie aplikacji.
 
 Filtrację antyaliasingową dobrać przed ewentualną decymacją. Dla 208 Hz rozważyć użyteczne pasmo
 około 20–40 Hz, wyłącznie przy ustawieniach rzeczywiście wspieranych przez układ. Podać wszystkie

@@ -1,6 +1,9 @@
-"""Right-handed SO(3) operations. Vehicle axes: X rear, Y right, Z up."""
+"""Right-handed SO(3) operations. Vehicle axes: X forward, Y left, Z up."""
 
 import numpy as np
+
+VEHICLE_AXES = "X forward, Y left, Z up"
+VEHICLE_FRAME = "FLU"
 
 
 def skew(v):
@@ -40,8 +43,8 @@ def rotation_log(rotation):
 
 
 def track_rotation(velocity):
-    """Zero-bank reference: rear axis opposes forward travel, right axis is horizontal."""
-    x = -velocity / np.linalg.norm(velocity)
+    """Zero-bank reference: forward X follows travel, left Y is horizontal."""
+    x = velocity / np.linalg.norm(velocity)
     y = np.cross([0.0, 0.0, 1.0], x)
     y /= np.linalg.norm(y)
     return np.column_stack((x, y, np.cross(x, y)))
@@ -49,7 +52,9 @@ def track_rotation(velocity):
 
 def attitude_angles(rotation):
     roll = np.arctan2(rotation[2, 1], rotation[2, 2])
-    pitch = np.arcsin(np.clip(-rotation[2, 0], -1, 1))
-    forward = -rotation[:, 0]
+    # Preserve the physical front-up pitch readout. With leftward Y, this is
+    # opposite the right-hand rotation angle about +Y (and its gyro rate).
+    pitch = np.arcsin(np.clip(rotation[2, 0], -1, 1))
+    forward = rotation[:, 0]
     heading = np.arctan2(forward[0], forward[1]) % (2 * np.pi)
     return np.degrees([roll, pitch, heading])

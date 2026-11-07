@@ -1,4 +1,4 @@
-"""Independent synthetic vehicle physics: rear/right/up axes, slope, turns and GNSS loss."""
+"""Independent synthetic vehicle physics: forward/left/up axes, slope, turns and GNSS loss."""
 
 import argparse
 import csv
@@ -48,14 +48,14 @@ def trajectory(
     )
     world_acceleration = acceleration[:, None] * direction + speed[:, None] * derivative
     rotations = np.empty((len(time), 3, 3))
-    rotations[:, :, 0] = -direction
-    rotations[:, :, 1] = np.column_stack((np.sin(yaw), -np.cos(yaw), np.zeros(len(time))))
+    rotations[:, :, 0] = direction
+    rotations[:, :, 1] = np.column_stack((-np.sin(yaw), np.cos(yaw), np.zeros(len(time))))
     rotations[:, :, 2] = np.column_stack(
         (-np.sin(pitch) * np.cos(yaw), -np.sin(pitch) * np.sin(yaw), np.cos(pitch))
     )
     force_body = np.einsum("nji,nj->ni", rotations, world_acceleration + [0, 0, 9.80665])
     angular_body = np.column_stack(
-        (-yaw_rate * np.sin(pitch), pitch_rate, yaw_rate * np.cos(pitch))
+        (yaw_rate * np.sin(pitch), -pitch_rate, yaw_rate * np.cos(pitch))
     )
     # Explicit Euler products, independent of the application rotation routines.
     a, b, c = 0.6, -0.12, 0.08

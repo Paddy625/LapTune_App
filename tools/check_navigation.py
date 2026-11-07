@@ -102,8 +102,9 @@ def verify_map(encoded):
         metadata = json.loads(
             csv_path.with_suffix(".csv.metadata.json").read_text(encoding="utf-8")
         )
-        assert metadata["navigation"]["axes"] == "X rear, Y right, Z up; world East, North, Up"
-        assert "rearward" in metadata["channels"]["EST_ACC_X"]["description"]
+        assert metadata["navigation"]["axes"] == "X forward, Y left, Z up; world East, North, Up"
+        assert metadata["navigation"]["vehicle_frame"] == "FLU"
+        assert "positive forward" in metadata["channels"]["EST_ACC_X"]["description"]
         with patch(
             "telemetry_viewer.gui.main_window.QFileDialog.getSaveFileName",
             return_value=(str(gpx_path), ""),
@@ -168,7 +169,7 @@ def check():
                 assert hashlib.sha256(session.channels[name].samples.tobytes()).digest() == digest
             assert all(name.startswith("EST_") for name in session.navigation.channels)
             item = window.channels.items["EST_ACC_X"][0]
-            assert item.parent().text(0) == "Calculated" and "rearward" in item.toolTip(0)
+            assert item.parent().text(0) == "Calculated" and "positive forward" in item.toolTip(0)
             selected = ["GPS_SPEED_KMH", "EST_SPEED_KMH", "EST_ACC_X"]
             dialog = PlotConfigurationDialog(session, 0, [], "GPS / EST comparison", {}, window)
             for name, item in dialog.channel_items.items():

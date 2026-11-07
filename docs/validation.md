@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **116 passed**, including optional private import/navigation integration tests.
+- `pytest -q`: **129 passed**, including optional private import/navigation integration tests.
   Public CI skips four private cases when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -128,7 +128,7 @@ Three empty-clock spans have explicit estimation diagnostics. Recorded clock bac
 trigger the existing monotonic point corrections and associated GPS jump checks; raw input
 times and measurements remain unchanged. Neither private log is committed.
 
-EST navigation tests validate rear/right/up signs, full tilted-gravity compensation, SO(3) edge
+EST navigation tests validate forward/left/up signs, full tilted-gravity compensation, SO(3) edge
 angles, driving-only mounting/bias recovery, straight constant-speed driving with changing grade,
 unobservable-motion rejection, independent hardware/legacy clocks, preserved recording gaps,
 hardware reset reinitialization, true identical new GPS epochs versus held values, innovation
@@ -139,3 +139,9 @@ exports and close cancellation. Three synthetic ground-truth scenarios and expli
 are documented in [navigation.md](navigation.md) and benchmarks/navigation.json. Private samples
 also complete driving calibration/navigation locally; that establishes functionality, not true
 position accuracy. No stationary calibration or zero-velocity shortcut is used.
+
+The FLU revision validates forward acceleration/braking, left/right lateral acceleration and yaw,
+cardinal headings without a 180° offset, uphill/downhill front-up pitch, and calibration of a sensor
+already aligned with forward/left/up. A covariance/state regression verifies that rotating the body
+reference axes preserves the global position and velocity solution. New outputs/export metadata
+identify `navigation_eskf_v2` and FLU; raw channel identities, arrays and names stay unchanged.

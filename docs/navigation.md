@@ -37,28 +37,30 @@ automatically recalculated when EST is rerun.
 
 ## Axes, calibration and propagation
 
-Vehicle axes are right-handed: **X rear, Y right, Z up**; world coordinates are local East/North/Up.
-Forward body velocity is approximately `[-u, 0, 0]`. After gravity removal, acceleration is negative
-X when accelerating forward, positive X when braking, positive Y towards the right. Positive Z
-angular rate means a left turn. Positive pitch means vehicle front up.
+Vehicle axes are right-handed **FLU: X forward, Y left, Z up**; world coordinates are local
+East/North/Up. Forward body velocity is approximately `[u, 0, 0]`. After gravity removal,
+acceleration is positive X when accelerating forward, negative X when braking, positive Y towards
+the left. Positive Z angular rate means a left turn. Pitch display remains positive front up;
+this is opposite the right-hand angular rate about leftward Y, so raising the front gives negative
+`EST_GYRO_Y`. Roll is the right-hand rotation about forward X.
 
 The offline calibration reference uses time-aware weighted local quadratic fits to GPS positions,
-native horizontal speed and available MSL height. Its reference orientation has rearward X opposite
-the 3D direction of travel, horizontal rightward Y, and upward Z; its bank is defined as zero.
+native horizontal speed and available MSL height. Its reference orientation has forward X along
+the 3D direction of travel, horizontal leftward Y, and upward Z; its bank is defined as zero.
 Samples below 3 m/s and across GPS gaps are excluded. The dialog's smoothing parameter is a
 half-window, normally 2.5 s. The fit requires enough GPS samples on both sides of each reference.
 
 For a forward vehicle without substantial sideslip:
 
 ```
-v_body = [-u, 0, 0]
-a_body = [-du/dt, -u*omega_Z, u*omega_Y]
+v_body = [u, 0, 0]
+a_body = [du/dt, u*omega_Z, -u*omega_Y]
 f_reference = a_body - R_world_from_body.T @ gravity_world
 ```
 
 Road grade is `atan2(vertical_speed, horizontal_speed)`. MSL height remains separate from WGS84
-ellipsoid height. For straight, unbanked travel, specific force along rearward X is
-`-du/dt - g*sin(grade)`: climbing gravity is not mistakenly removed as sensor DC bias.
+ellipsoid height. For straight, unbanked travel, specific force along forward X is
+`du/dt + g*sin(grade)`: climbing gravity is not mistakenly removed as sensor DC bias.
 
 A robust centered Wahba/SVD fit jointly identifies the fixed sensor-to-vehicle rotation and constant
 ACC/GYRO biases from moving data. It combines force and angular references, iteratively downweights
@@ -129,14 +131,14 @@ fixes cannot be distinguished from held values. The report explicitly records th
 | `EST_LAT`, `EST_LON` | Fused/propagated vehicle coordinates [deg] |
 | `EST_ALT_MSL_M` | Estimated MSL altitude [m]; unavailable without a measured height reference |
 | `EST_SPEED_KMH` | Estimated horizontal speed [km/h] |
-| `EST_VEL_X/Y/Z` | Estimated vehicle-frame velocity [m/s]; forward X is negative |
+| `EST_VEL_X/Y/Z` | Estimated vehicle-frame velocity [m/s]; forward X is positive, left Y is positive |
 | `EST_DISTANCE_M` | Integral of fused horizontal speed [m], excluding invalid IMU gaps |
 | `EST_ACC_X/Y/Z` | Vehicle-frame linear acceleration, bias/gravity removed [m/s²] |
 | `EST_GYRO_X/Y/Z` | Vehicle-frame angular rates, bias compensated [deg/s] |
 | `EST_ACC_BIAS_X/Y/Z` | Estimated vehicle-frame ACC bias being subtracted [m/s²] |
 | `EST_GYRO_BIAS_X/Y/Z` | Estimated vehicle-frame gyro bias being subtracted [deg/s] |
 | `EST_ROLL_DEG`, `EST_PITCH_DEG` | Vehicle orientation angles [deg] |
-| `EST_HEADING_DEG` | Forward heading clockwise from north, opposite rearward X [deg] |
+| `EST_HEADING_DEG` | Heading of forward +X clockwise from north [deg] |
 | `EST_POS_SIGMA_M` | Model horizontal RMS standard uncertainty, sqrt(P_EE + P_NN) |
 | `EST_POS_95_M` | Model 95% enclosing radius from the largest horizontal covariance eigenvalue |
 | `EST_GPS_AGE_S` | Integration time since the last accepted new horizontal position |
@@ -149,6 +151,12 @@ Diagnostic status/time channels can explain those intervals. Neither raw distanc
 by `EST_DISTANCE_M`. CSV preserves the shared plotting-row alignment and includes navigation time
 as an explicitly selected EST signal. EST GPX includes status, uncertainty, integration time, raw
 time and the report as extensions, without manufacturing UTC timestamps during GPS loss.
+
+The FLU update identifies new results as `navigation_eskf_v2` and records `vehicle_frame: FLU` in
+calibration/navigation metadata. Recalculate EST after updating. Earlier v1 exports used X rear,
+Y right, Z up and retain that recorded convention; existing raw logs and exported files are not
+rewritten. The mounting fit still uses the original sensor readings and compensates residual
+misalignment even when the sensor is physically aligned with forward/left/up.
 
 ## Accuracy limits and validation
 
@@ -165,9 +173,9 @@ Use the calibration report and estimated uncertainty alongside the original meas
 
 `tools/generate_navigation_demo.py` independently generates a known 3D trajectory, nontrivial mounting,
 sensor biases, 50 Hz IMU, 5 Hz GPS and a 7 s outage. Three seeded scenarios in
-[benchmarks/navigation.json](benchmarks/navigation.json) recover mounting within 0.43°, reduce
+[benchmarks/navigation.json](benchmarks/navigation.json) recover mounting within 0.45°, reduce
 horizontal error at GPS epochs from about 0.21 m RMS to 0.08–0.09 m RMS, and reach maximum outage
-errors of 0.22–1.53 m. These intentionally synthetic conditions and offline whole-drive calibration
+errors of approximately 0.31–1.53 m. These synthetic conditions and offline whole-drive calibration
 do **not** establish real NEO-6/LSM6DS3 accuracy.
 
 ```

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from telemetry_viewer.domain.models import Session
+from telemetry_viewer.processing.rotations import VEHICLE_AXES
 
 
 class Exporter(Protocol):
@@ -159,7 +160,7 @@ def export_estimated_gpx(session: Session, path: Path) -> None:
     ET.SubElement(track, f"{{{ns}}}name").text = session.filename + " · EST estimated trajectory"
     ET.SubElement(track, f"{{{ns}}}desc").text = (
         "Estimated IMU/GNSS trajectory, including dead reckoning. Not raw GPS measurements. "
-        "Uncertainty is model based. Vehicle axes X rear, Y right, Z up."
+        f"Uncertainty is model based. Vehicle axes {VEHICLE_AXES}."
     )
     segment, previous = None, None
     for row in rows:

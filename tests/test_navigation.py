@@ -22,7 +22,12 @@ from telemetry_viewer.processing.navigation import (
 )
 from telemetry_viewer.processing.navigation_calibration import fit_mounting
 from telemetry_viewer.processing.navigation_inputs import gps_observations, navigation_clock
-from telemetry_viewer.processing.rotations import rotation_exp, rotation_log, track_rotation
+from telemetry_viewer.processing.rotations import (
+    attitude_angles,
+    rotation_exp,
+    rotation_log,
+    track_rotation,
+)
 
 
 @pytest.fixture(scope="module")
@@ -33,9 +38,10 @@ def navigation_data(tmp_path_factory):
     return session, truth
 
 
-def test_rotations_rear_right_up_and_limits():
+def test_rotations_forward_left_up_and_limits():
     rotation = track_rotation(np.array([10.0, 0, 0]))
-    np.testing.assert_allclose(rotation.T @ [10, 0, 0], [-10, 0, 0])
+    np.testing.assert_allclose(rotation.T @ [10, 0, 0], [10, 0, 0])
+    np.testing.assert_allclose(rotation, np.eye(3))
     np.testing.assert_allclose(np.cross(rotation[:, 0], rotation[:, 1]), rotation[:, 2])
     for vector in ([0, 0, 0], [0.1, -0.2, 0.3], [np.pi, 0, 0]):
         np.testing.assert_allclose(
@@ -143,7 +149,10 @@ def test_calibration_recovers_rotation_and_bias_without_standstill(navigation_da
     )
     assert not result.channels["EST_LAT"].valid[:100].any()
     assert result.channels["EST_LAT"].valid[1450:1700].all()
-    assert np.nanmedian(result.channels["EST_VEL_X"].samples) < 0
+    assert np.nanmedian(result.channels["EST_VEL_X"].samples) > 0
+    assert result.report["vehicle_frame"] == "FLU"
+    assert result.report["calibration"]["vehicle_frame"] == "FLU"
+    assert all(c.calculation["kind"] == "navigation_eskf_v2" for c in result.channels.values())
     expected_bias = truth["mounting"] @ truth["bg"]
     for j, axis in enumerate("XYZ"):
         assert np.nanmedian(result.channels["EST_GYRO_BIAS_" + axis].samples) == pytest.approx(
@@ -223,6 +232,7 @@ def test_no_imu_gap_is_bridged_and_est_gpx_has_separate_segments(navigation_data
     root = ET.parse(path).getroot()
     assert len(root.findall(".//{*}trkseg")) == 2
     assert root.get("creator") == "LapTune EST"
+    assert "X forward, Y left, Z up" in root.find(".//{*}desc").text
     assert not root.findall(".//{*}time")
     assert len(root.findall(".//{*}trkpt")) == result.channels["EST_LAT"].valid.sum()
     raw_path = tmp_path / "raw.gpx"
@@ -321,7 +331,17 @@ def test_cancellation_does_not_publish_partial_channels(navigation_data):
     assert list(source.channels) == names and source.navigation is None
 
 
-def test_gravity_and_yaw_sign_without_measurement_corrections():
+@pytest.mark.parametrize(
+    "force, expected_v, expected_p",
+    [
+        ([1.0, 0, 9.80665], [11, 0, 0], [10.5, 0, 0]),
+        ([-1.0, 0, 9.80665], [9, 0, 0], [9.5, 0, 0]),
+        ([0, 2.0, 9.80665], [10, 2, 0], [10, 1, 0]),
+        ([0, -2.0, 9.80665], [10, -2, 0], [10, -1, 0]),
+    ],
+    ids=["accelerating-forward", "braking", "accelerating-left", "accelerating-right"],
+)
+def test_vehicle_acceleration_signs(force, expected_v, expected_p):
     config = NavigationConfig()
     filt = InertialFilter(
         np.zeros(3),
@@ -332,11 +352,105 @@ def test_gravity_and_yaw_sign_without_measurement_corrections():
         config,
     )
     for _ in range(100):
-        filt.predict(np.array([-1.0, 0, 9.80665]), np.zeros(3), 0.01)
-    assert filt.v[0] == pytest.approx(11, abs=1e-9)  # Negative body X accelerates forward east.
-    assert filt.v[2] == pytest.approx(0, abs=1e-9)
-    assert filt.p[0] == pytest.approx(10.5, abs=1e-9)
+        filt.predict(np.array(force), np.zeros(3), 0.01)
+    np.testing.assert_allclose(filt.v, expected_v, atol=1e-9)
+    np.testing.assert_allclose(filt.p, expected_p, atol=1e-9)
     assert np.linalg.eigvalsh(filt.covariance).min() >= -1e-10
+
+
+@pytest.mark.parametrize(
+    "velocity, heading, pitch",
+    [
+        ([10.0, 0, 0], 90, 0),
+        ([0, 10.0, 0], 0, 0),
+        ([-10.0, 0, 0], 270, 0),
+        ([0, -10.0, 0], 180, 0),
+        ([10.0, 0, 2.0], 90, np.degrees(np.arctan2(2, 10))),
+        ([0, 10.0, -2.0], 0, -np.degrees(np.arctan2(2, 10))),
+    ],
+    ids=["east", "north", "west", "south", "uphill", "downhill"],
+)
+def test_forward_heading_and_front_up_pitch(velocity, heading, pitch):
+    rotation = track_rotation(np.array(velocity))
+    np.testing.assert_allclose(attitude_angles(rotation), [0, pitch, heading], atol=1e-9)
+    np.testing.assert_allclose(rotation.T @ velocity, [np.linalg.norm(velocity), 0, 0], atol=1e-9)
+    assert np.linalg.det(rotation) == pytest.approx(1)
+    assert attitude_angles(rotation_exp([0, -0.1, 0]))[1] > 0
+
+
+@pytest.mark.parametrize("yaw_rate", [0.1, -0.1], ids=["left-turn", "right-turn"])
+def test_turns_have_correct_lateral_and_yaw_signs(yaw_rate):
+    filt = InertialFilter(
+        np.zeros(3), np.array([10.0, 0, 0]), np.eye(3), np.zeros(3), np.zeros(3), NavigationConfig()
+    )
+    for _ in range(100):
+        filt.predict(np.array([0, 10 * yaw_rate, 9.80665]), np.array([0, 0, yaw_rate]), 0.01)
+    np.testing.assert_allclose(
+        filt.v[:2], [10 * np.cos(yaw_rate), 10 * np.sin(yaw_rate)], atol=1e-5
+    )
+    np.testing.assert_allclose(
+        filt.p[:2],
+        [10 / yaw_rate * np.sin(yaw_rate), 10 / yaw_rate * (1 - np.cos(yaw_rate))],
+        atol=1e-5,
+    )
+    assert filt.v[1] * yaw_rate > 0
+
+
+def test_body_frame_change_preserves_world_solution():
+    half_turn = np.diag([-1.0, -1.0, 1.0])
+    rotation = rotation_exp([0.05, -0.1, 0.7])
+    ba, bg = np.array([0.02, -0.03, 0.04]), np.array([0.001, -0.002, 0.001])
+    velocity = np.array([12.0, 4.0, 0.2])
+    flu = InertialFilter(np.zeros(3), velocity, rotation, ba, bg, NavigationConfig())
+    legacy = InertialFilter(
+        np.zeros(3),
+        velocity,
+        rotation @ half_turn,
+        half_turn @ ba,
+        half_turn @ bg,
+        NavigationConfig(),
+    )
+    h = np.zeros((2, 15))
+    h[:, :2] = np.eye(2)
+    for i in range(100):
+        force = np.array([0.2 * np.cos(i / 20), 0.3 * np.sin(i / 20), 9.80665])
+        gyro = np.array([0.01, -0.02, 0.03 * np.cos(i / 10)])
+        flu.predict(force, gyro, 0.02)
+        legacy.predict(half_turn @ force, half_turn @ gyro, 0.02)
+        if i % 10 == 0:
+            measurement = flu.p[:2] + [0.1, -0.2]
+            assert flu.update(measurement - flu.p[:2], h, np.eye(2))
+            assert legacy.update(measurement - legacy.p[:2], h, np.eye(2))
+    np.testing.assert_allclose(flu.p, legacy.p, atol=1e-9)
+    np.testing.assert_allclose(flu.v, legacy.v, atol=1e-9)
+    np.testing.assert_allclose(flu.rotation, legacy.rotation @ half_turn, atol=1e-9)
+    np.testing.assert_allclose(flu.ba, half_turn @ legacy.ba, atol=1e-9)
+    np.testing.assert_allclose(flu.bg, half_turn @ legacy.bg, atol=1e-9)
+    np.testing.assert_allclose(flu.covariance[:6, :6], legacy.covariance[:6, :6], atol=1e-9)
+
+
+def test_aligned_sensor_calibrates_without_an_unwanted_half_turn(tmp_path):
+    truth = trajectory()
+    gyro_body = (truth["gyro"] - truth["bg"]) @ truth["mounting"].T
+    aligned = {
+        **truth,
+        "force": truth["force_body"] + truth["ba"],
+        "gyro": gyro_body + truth["bg"],
+        "mounting": np.eye(3),
+    }
+    session = LegacyTxtImporter().load(write_demo(tmp_path / "aligned.TXT", aligned))
+    originals = {name: channel.samples.copy() for name, channel in session.channels.items()}
+    result = estimate_navigation(
+        session, NavigationConfig(gps_position_sigma_m=1, gps_altitude_sigma_m=2)
+    )
+    mounting = np.array(result.report["calibration"]["rotation_sensor_to_vehicle"])
+    assert np.degrees(np.linalg.norm(rotation_log(mounting))) < 3
+    time = truth["time"]
+    assert np.nanmean(result.channels["EST_ACC_X"].samples[(time >= 4) & (time <= 7)]) > 0
+    assert np.nanmean(result.channels["EST_ACC_X"].samples[(time >= 13) & (time <= 17)]) < 0
+    assert np.nanmean(result.channels["EST_ACC_Y"].samples[(time >= 4) & (time <= 7)]) > 0
+    for name, samples in originals.items():
+        np.testing.assert_array_equal(session.channels[name].samples, samples)
 
 
 @pytest.mark.gui

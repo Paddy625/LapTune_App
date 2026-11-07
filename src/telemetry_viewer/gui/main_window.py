@@ -44,6 +44,7 @@ from telemetry_viewer.importers.legacy_txt import LegacyTxtImporter
 from telemetry_viewer.maps.map_widget import MapWidget
 from telemetry_viewer.processing.display import elapsed_clock
 from telemetry_viewer.processing.navigation import estimate_navigation
+from telemetry_viewer.processing.rotations import VEHICLE_AXES
 from telemetry_viewer.processing.signals import calculate_signal
 
 
@@ -721,7 +722,7 @@ class MainWindow(QMainWindow):
         report.setHtml(
             "<h3>Estimated vehicle motion</h3>"
             "<p>All results are EST channels in Calculated. Raw measurements are preserved.<br>"
-            "Vehicle axes: X rear, Y right, Z up.</p>"
+            f"Vehicle axes: {VEHICLE_AXES}.</p>"
             f"<h3>Driving calibration</h3><p>{calibration['samples']} moving reference samples "
             f"from {calibration['start_time_s']:.1f} to "
             f"{calibration['end_time_s']:.1f} navigation seconds.<br>"

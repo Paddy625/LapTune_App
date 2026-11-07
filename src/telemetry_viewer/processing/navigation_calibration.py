@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
-from telemetry_viewer.processing.rotations import rotation_log, track_rotation
+from telemetry_viewer.processing.rotations import VEHICLE_FRAME, rotation_log, track_rotation
 
 GRAVITY = 9.80665
 
@@ -25,6 +25,7 @@ class Calibration:
     def to_dict(self):
         result = asdict(self)
         result["units"] = {"acceleration_bias_sensor": "m/s²", "gyro_bias_sensor": "rad/s"}
+        result["vehicle_frame"] = VEHICLE_FRAME
         return result
 
 
@@ -159,9 +160,9 @@ def calibrate_driving(time, force, gyro, observations, config, progress=lambda x
         angular = reference_rotations[j].T @ reference_rotations[before] @ angular
         acceleration = np.array(
             [
-                -(speeds[after] - speeds[before]) / (clock[after] - clock[before]),
-                -speeds[j] * angular[2],
-                speeds[j] * angular[1],
+                (speeds[after] - speeds[before]) / (clock[after] - clock[before]),
+                speeds[j] * angular[2],
+                -speeds[j] * angular[1],
             ]
         )
         expected = acceleration - reference_rotations[j].T @ np.array([0, 0, -GRAVITY])

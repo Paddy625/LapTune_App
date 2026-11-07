@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from telemetry_viewer.processing.navigation import NavigationConfig
+from telemetry_viewer.processing.rotations import VEHICLE_AXES
 
 
 class NavigationDialog(QDialog):
@@ -34,7 +35,7 @@ class NavigationDialog(QDialog):
         root.addWidget(scroll)
         intro = QLabel(
             "Calibrate the mounting from forward driving, then combine ACC/GYRO with GPS. "
-            "Vehicle axes: X rear, Y right, Z up. No stationary calibration is used.\n\n"
+            f"Vehicle axes: {VEHICLE_AXES}. No stationary calibration is used.\n\n"
             "All outputs are named EST_… in Calculated. Original signals keep their "
             "names and values."
         )

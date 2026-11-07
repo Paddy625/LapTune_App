@@ -12,6 +12,8 @@ from telemetry_viewer.processing.navigation_inputs import (
     navigation_clock,
 )
 from telemetry_viewer.processing.rotations import (
+    VEHICLE_AXES,
+    VEHICLE_FRAME,
     attitude_angles,
     rotation_exp,
     skew,
@@ -69,14 +71,14 @@ DESCRIPTIONS = {
         "Estimated height above mean sea level; available only with a measured MSL reference",
     ),
     "EST_SPEED_KMH": ("km/h", "Estimated horizontal ground speed"),
-    "EST_VEL_X": ("m/s", "Estimated body velocity along rearward X; forward travel is negative"),
-    "EST_VEL_Y": ("m/s", "Estimated body velocity towards the right"),
+    "EST_VEL_X": ("m/s", "Estimated body velocity along forward X; forward travel is positive"),
+    "EST_VEL_Y": ("m/s", "Estimated body velocity towards the left"),
     "EST_VEL_Z": ("m/s", "Estimated body velocity upwards"),
-    "EST_ACC_BIAS_X": ("m/s²", "Estimated ACC bias to subtract along rearward vehicle X"),
-    "EST_ACC_BIAS_Y": ("m/s²", "Estimated ACC bias to subtract along rightward vehicle Y"),
+    "EST_ACC_BIAS_X": ("m/s²", "Estimated ACC bias to subtract along forward vehicle X"),
+    "EST_ACC_BIAS_Y": ("m/s²", "Estimated ACC bias to subtract along leftward vehicle Y"),
     "EST_ACC_BIAS_Z": ("m/s²", "Estimated ACC bias to subtract along upward vehicle Z"),
-    "EST_GYRO_BIAS_X": ("deg/s", "Estimated GYRO bias to subtract about rearward vehicle X"),
-    "EST_GYRO_BIAS_Y": ("deg/s", "Estimated GYRO bias to subtract about rightward vehicle Y"),
+    "EST_GYRO_BIAS_X": ("deg/s", "Estimated GYRO bias to subtract about forward vehicle X"),
+    "EST_GYRO_BIAS_Y": ("deg/s", "Estimated GYRO bias to subtract about leftward vehicle Y"),
     "EST_GYRO_BIAS_Z": ("deg/s", "Estimated GYRO bias to subtract about upward vehicle Z"),
     "EST_DISTANCE_M": (
         "m",
@@ -87,11 +89,11 @@ DESCRIPTIONS = {
     ),
     "EST_ACC_X": (
         "m/s²",
-        "Estimated linear acceleration X, positive rearward; gravity and estimated bias removed",
+        "Estimated linear acceleration X, positive forward; gravity and estimated bias removed",
     ),
     "EST_ACC_Y": (
         "m/s²",
-        "Estimated linear acceleration Y, positive right; gravity and estimated bias removed",
+        "Estimated linear acceleration Y, positive left; gravity and estimated bias removed",
     ),
     "EST_ACC_Z": (
         "m/s²",
@@ -99,24 +101,25 @@ DESCRIPTIONS = {
     ),
     "EST_GYRO_X": (
         "deg/s",
-        "Estimated angular rate about rearward X; mounting and bias compensated",
+        "Estimated angular rate about forward X; mounting and bias compensated",
     ),
     "EST_GYRO_Y": (
         "deg/s",
-        "Estimated angular rate about rightward Y; mounting and bias compensated",
+        "Estimated angular rate about leftward Y; positive front down; "
+        "mounting and bias compensated",
     ),
     "EST_GYRO_Z": (
         "deg/s",
         "Estimated angular rate about upward Z; positive left turn; mounting and bias compensated",
     ),
-    "EST_ROLL_DEG": ("deg", "Estimated right-hand roll about rearward X"),
-    "EST_PITCH_DEG": ("deg", "Estimated pitch; positive vehicle front up"),
+    "EST_ROLL_DEG": ("deg", "Estimated right-hand roll about forward X"),
+    "EST_PITCH_DEG": (
+        "deg",
+        "Estimated pitch angle, positive front up; opposite right-hand rotation about leftward Y",
+    ),
     "EST_HEADING_DEG": (
         "deg",
-        (
-            "Estimated vehicle forward heading, clockwise from true north; opposite the"
-            " rearward X axis"
-        ),
+        "Estimated vehicle forward heading along +X, clockwise from true north",
     ),
     "EST_POS_SIGMA_M": (
         "m",
@@ -458,8 +461,10 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
             "model-based, not a validated accuracy bound"
         )
     report = {
-        "algorithm": "15-error-state multiplicative SO(3) IMU/GNSS filter v1",
-        "axes": "X rear, Y right, Z up; world East, North, Up",
+        "algorithm": "15-error-state multiplicative SO(3) IMU/GNSS filter v2 (FLU)",
+        "axes": VEHICLE_AXES + "; world East, North, Up",
+        "vehicle_frame": VEHICLE_FRAME,
+        "pitch_convention": "Positive front up, opposite right-hand rotation about leftward +Y",
         "config": asdict(config),
         "calibration": calibration.to_dict(),
         "warnings": warnings,
@@ -489,7 +494,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
             samples,
             session.elapsed_time_s,
             np.isfinite(samples),
-            calculation={"kind": "navigation_eskf_v1", "report": report},
+            calculation={"kind": "navigation_eskf_v2", "report": report},
             description=description,
         )
     progress(100)
