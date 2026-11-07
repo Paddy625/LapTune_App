@@ -252,7 +252,7 @@ class MainWindow(QMainWindow):
         self.export_menu = QMenu("Export", self)
         self.export_menu.addAction("Selected channels to CSV…", lambda: self.export("csv"))
         self.export_menu.addAction("GPS route to GPX…", lambda: self.export("gpx"))
-        self.export_menu.addAction("EST trajectory to GPX…", lambda: self.export("est_gpx"))
+        self.export_menu.addAction("CALC trajectory to GPX…", lambda: self.export("est_gpx"))
         file_menu.addMenu(self.export_menu)
         file_menu.addSeparator()
         file_menu.addAction("Quit", self.close, QKeySequence.StandardKey.Quit)
@@ -265,11 +265,11 @@ class MainWindow(QMainWindow):
         session_menu.addAction("Data quality and distance report…", self.show_quality)
         self.signal_tools_action = QAction("Calculate / filter signals…", self)
         self.signal_tools_action.triggered.connect(self.show_signal_tools)
-        self.navigation_action = QAction("Estimate motion (EST)…", self)
+        self.navigation_action = QAction("Estimate motion (CALC)…", self)
         self.navigation_action.triggered.connect(self.show_navigation)
         session_menu.addAction(self.navigation_action)
         session_menu.addAction(
-            "EST calibration and navigation report…", self.show_navigation_report
+            "CALC calibration and navigation report…", self.show_navigation_report
         )
         self.statistics_action = QAction("Signal statistics…", self)
         self.statistics_action.triggered.connect(self.show_statistics)
@@ -327,9 +327,9 @@ class MainWindow(QMainWindow):
         self.layer_combo.currentTextChanged.connect(self.layer_changed)
         self.map_controls.addWidget(self.layer_combo)
         self.track_combo = QComboBox()
-        self.track_combo.addItems(["GPS + EST", "GPS", "EST"])
+        self.track_combo.addItems(["GPS + CALC", "GPS", "CALC"])
         self.track_combo.setToolTip(
-            "Compare the recorded GPS route and the estimated EST trajectory"
+            "Compare the recorded GPS route and the estimated CALC trajectory"
         )
         self.track_combo.currentTextChanged.connect(self.map_widget.set_track_mode)
         self.track_action = self.map_controls.addWidget(self.track_combo)
@@ -474,7 +474,7 @@ class MainWindow(QMainWindow):
         self.cursor_sample = 0
         self.track_action.setVisible(False)
         self.track_combo.setCurrentIndex(0)
-        self.map_widget.set_track_mode("GPS + EST")
+        self.map_widget.set_track_mode("GPS + CALC")
         session.metadata.timezone = self.settings.value("timezone", "")
         session.metadata.orientation = self.settings.value("orientation", "Unspecified sensor axes")
         self.apply_units(
@@ -697,22 +697,24 @@ class MainWindow(QMainWindow):
         self.session.navigation = result
         self.channels.populate(self.session, assignments)
         self.channels.scrollToItem(
-            self.channels.items["EST_LAT"][0].parent(), QAbstractItemView.ScrollHint.PositionAtTop
+            self.channels.items["CALC_LAT"][0].parent(), QAbstractItemView.ScrollHint.PositionAtTop
         )
         self.map_widget.set_estimated_route()
         self.track_action.setVisible(True)
         self.set_cursor(self.cursor_sample)
         self.statusBar().showMessage(
-            f"Created {len(result.channels)} EST channels in Calculated · Session > EST report",
+            f"Created {len(result.channels)} CALC channels in Calculated · Session > CALC report",
             15000,
         )
 
     def show_navigation_report(self):
         if self.session is None or self.session.navigation is None:
-            QMessageBox.information(self, "No EST results", "Choose Estimate motion (EST)… first.")
+            QMessageBox.information(
+                self, "No CALC results", "Choose Estimate motion (CALC)… first."
+            )
             return
         dialog = QDialog(self)
-        dialog.setWindowTitle("EST · calibration and navigation report")
+        dialog.setWindowTitle("CALC · calibration and navigation report")
         dialog.resize(800, 650)
         layout = QVBoxLayout(dialog)
         report = QTextBrowser()
@@ -721,8 +723,10 @@ class MainWindow(QMainWindow):
         warnings = "".join(f"<li>{html.escape(warning)}</li>" for warning in result["warnings"])
         report.setHtml(
             "<h3>Estimated vehicle motion</h3>"
-            "<p>All results are EST channels in Calculated. Raw measurements are preserved.<br>"
+            "<p>All results are CALC channels in Calculated. Raw measurements are preserved.<br>"
             f"Vehicle axes: {VEHICLE_AXES}.</p>"
+            "<p>CALC_ACC: vehicle acceleration [m/s²]. CALC_G_LOAD: opposite motion-induced "
+            "inertial load [g], with gravity excluded (zero at rest).</p>"
             f"<h3>Driving calibration</h3><p>{calibration['samples']} moving reference samples "
             f"from {calibration['start_time_s']:.1f} to "
             f"{calibration['end_time_s']:.1f} navigation seconds.<br>"
@@ -737,7 +741,7 @@ class MainWindow(QMainWindow):
             f"Rows with estimated/repaired time: {result['estimated_time_rows']}</p>"
             f"<h3>Assumptions and confidence</h3><ul>{warnings}</ul>"
             "<p>Position uncertainty is model based, not a guarantee of real accuracy. "
-            "Full calibration parameters and settings accompany CSV and EST GPX exports.</p>"
+            "Full calibration parameters and settings accompany CSV and CALC GPX exports.</p>"
         )
         layout.addWidget(report)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -955,7 +959,9 @@ class MainWindow(QMainWindow):
         if self.session is None:
             return
         if kind == "est_gpx" and self.session.navigation is None:
-            QMessageBox.information(self, "No EST results", "Choose Estimate motion (EST)… first.")
+            QMessageBox.information(
+                self, "No CALC results", "Choose Estimate motion (CALC)… first."
+            )
             return
         suffix = "gpx" if kind == "est_gpx" else kind
         names = list(dict.fromkeys(name for name, _, _ in self.channels.selection()))
@@ -966,10 +972,10 @@ class MainWindow(QMainWindow):
             return
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export " + ("EST trajectory GPX" if kind == "est_gpx" else kind.upper()),
+            "Export " + ("CALC trajectory GPX" if kind == "est_gpx" else kind.upper()),
             str(
                 Path.home()
-                / (f"telemetry-est.{suffix}" if kind == "est_gpx" else f"telemetry.{suffix}")
+                / (f"telemetry-calc.{suffix}" if kind == "est_gpx" else f"telemetry.{suffix}")
             ),
             f"{suffix.upper()} (*.{suffix})",
         )

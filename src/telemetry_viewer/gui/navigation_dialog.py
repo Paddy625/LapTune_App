@@ -1,4 +1,4 @@
-"""Driving calibration and navigation settings; every published signal is explicitly EST."""
+"""Driving calibration and navigation settings; every published signal is explicitly CALC."""
 
 import numpy as np
 from PySide6.QtWidgets import (
@@ -24,7 +24,7 @@ class NavigationDialog(QDialog):
     def __init__(self, session, mode, bounds, parent=None):
         super().__init__(parent)
         self.session, self.mode, self.bounds = session, mode, bounds
-        self.setWindowTitle("Estimate vehicle motion · EST")
+        self.setWindowTitle("Estimate vehicle motion · CALC")
         self.resize(670, 640)
         root = QVBoxLayout(self)
         content = QWidget()
@@ -36,8 +36,10 @@ class NavigationDialog(QDialog):
         intro = QLabel(
             "Calibrate the mounting from forward driving, then combine ACC/GYRO with GPS. "
             f"Vehicle axes: {VEHICLE_AXES}. No stationary calibration is used.\n\n"
-            "All outputs are named EST_… in Calculated. Original signals keep their "
-            "names and values."
+            "All outputs are named CALC_… in Calculated. Original signals keep their "
+            "names and values.\n\n"
+            "CALC_ACC is vehicle acceleration in m/s². CALC_G_LOAD is the opposite "
+            "motion-induced inertial load in g; gravity is excluded (zero at rest)."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -124,7 +126,7 @@ class NavigationDialog(QDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Calculate EST signals")
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Calculate CALC signals")
         self.buttons.accepted.connect(self._accept)
         self.buttons.rejected.connect(self.reject)
         root.addWidget(self.buttons)

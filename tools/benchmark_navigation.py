@@ -32,13 +32,13 @@ def benchmark():
             channels = result.channels
             position = np.column_stack(
                 (
-                    np.radians(channels["EST_LON"].samples) * 6378137,
-                    np.radians(channels["EST_LAT"].samples) * 6335439.3272928,
+                    np.radians(channels["CALC_LON"].samples) * 6378137,
+                    np.radians(channels["CALC_LAT"].samples) * 6335439.3272928,
                 )
             )
             error = np.linalg.norm(position - truth["position"][:, :2], axis=1)
             gps_rows = np.array([text == "N" for text in session.logger_fields["GPS_STATE"]])
-            aided = gps_rows & channels["EST_LAT"].valid
+            aided = gps_rows & channels["CALC_LAT"].valid
             dropout = (truth["time"] >= 28) & (truth["time"] < 35)
             raw_error = np.linalg.norm(
                 truth["measured_position"][:, :2] - truth["position"][:, :2], axis=1
@@ -72,7 +72,7 @@ def benchmark():
                         float(np.sqrt(np.nanmean(error**2))), 4
                     ),
                     "seven_second_gps_loss_max_error_m": round(float(np.nanmax(error[dropout])), 4),
-                    "gps_loss_output_complete": bool(channels["EST_LAT"].valid[dropout].all()),
+                    "gps_loss_output_complete": bool(channels["CALC_LAT"].valid[dropout].all()),
                     "raw_arrays_unchanged": before
                     == {
                         k: hashlib.sha256(c.samples.tobytes()).digest()

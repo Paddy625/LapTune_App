@@ -1,4 +1,4 @@
-"""Real offline GUI: driving wizard, worker, EST plots/map/exports and cancellation."""
+"""Real offline GUI: driving wizard, worker, CALC plots/map/exports and cancellation."""
 
 import argparse
 import csv
@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
+import numpy as np
 from generate_navigation_demo import write_demo
 from PySide6.QtCore import Qt, QTimer
 
@@ -83,8 +84,8 @@ def verify_map(encoded):
         session = window.session
         assert (
             window.map_widget.sample_for_location(
-                session.channels["EST_LAT"].samples[1500],
-                session.channels["EST_LON"].samples[1500],
+                session.channels["CALC_LAT"].samples[1500],
+                session.channels["CALC_LON"].samples[1500],
                 1500,
             )
             == 1500
@@ -98,21 +99,30 @@ def verify_map(encoded):
         with csv_path.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
         assert len(rows) == len(session.nr)
-        assert "EST_ACC_X [m/s²]" in rows[0] and rows[0]["EST_ACC_X [m/s²]"] == ""
+        assert "CALC_ACC_X [m/s²]" in rows[0] and rows[0]["CALC_ACC_X [m/s²]"] == ""
+        assert "CALC_G_LOAD_X [g]" in rows[0] and rows[0]["CALC_G_LOAD_X [g]"] == ""
+        assert (
+            float(rows[1500]["CALC_G_LOAD_X [g]"])
+            == -float(rows[1500]["CALC_ACC_X [m/s²]"]) / 9.80665
+        )
         metadata = json.loads(
             csv_path.with_suffix(".csv.metadata.json").read_text(encoding="utf-8")
         )
         assert metadata["navigation"]["axes"] == "X forward, Y left, Z up; world East, North, Up"
         assert metadata["navigation"]["vehicle_frame"] == "FLU"
-        assert "positive forward" in metadata["channels"]["EST_ACC_X"]["description"]
+        assert metadata["navigation"]["output_prefix"] == "CALC_"
+        assert metadata["navigation"]["g_load"]["includes_gravity"] is False
+        assert not any(name.startswith("EST_") for name in metadata["channels"])
+        assert metadata["channels"]["CALC_G_LOAD_X"]["unit"] == "g"
+        assert "positive forward" in metadata["channels"]["CALC_ACC_X"]["description"]
         with patch(
             "telemetry_viewer.gui.main_window.QFileDialog.getSaveFileName",
             return_value=(str(gpx_path), ""),
         ):
             window.export("est_gpx")
         root = ET.parse(gpx_path).getroot()
-        assert root.get("creator") == "LapTune EST"
-        assert root.findall(".//{*}EST_NAV_STATUS") and root.find(".//{*}EST_report") is not None
+        assert root.get("creator") == "LapTune CALC"
+        assert root.findall(".//{*}CALC_NAV_STATUS") and root.find(".//{*}CALC_report") is not None
         # Wait for the Qt/WebEngine compositor, not only the JavaScript callback, before capture.
         QTimer.singleShot(300, finish_success)
     except Exception:
@@ -167,11 +177,16 @@ def check():
             for name, (identity, digest) in state["raw"].items():
                 assert id(session.channels[name]) == identity
                 assert hashlib.sha256(session.channels[name].samples.tobytes()).digest() == digest
-            assert all(name.startswith("EST_") for name in session.navigation.channels)
-            item = window.channels.items["EST_ACC_X"][0]
+            assert all(name.startswith("CALC_") for name in session.navigation.channels)
+            for axis in "XYZ":
+                load = session.channels["CALC_G_LOAD_" + axis]
+                acceleration = session.channels["CALC_ACC_" + axis]
+                np.testing.assert_allclose(load.samples, -acceleration.samples / 9.80665)
+                assert "gravity excluded" in window.channels.items[load.name][0].toolTip(0).lower()
+            item = window.channels.items["CALC_ACC_X"][0]
             assert item.parent().text(0) == "Calculated" and "positive forward" in item.toolTip(0)
-            selected = ["GPS_SPEED_KMH", "EST_SPEED_KMH", "EST_ACC_X"]
-            dialog = PlotConfigurationDialog(session, 0, [], "GPS / EST comparison", {}, window)
+            selected = ["GPS_SPEED_KMH", "CALC_SPEED_KMH", "CALC_ACC_X", "CALC_G_LOAD_X"]
+            dialog = PlotConfigurationDialog(session, 0, [], "GPS / CALC comparison", {}, window)
             for name, item in dialog.channel_items.items():
                 item.setCheckState(
                     0, Qt.CheckState.Checked if name in selected else Qt.CheckState.Unchecked
@@ -181,9 +196,9 @@ def check():
                 "telemetry_viewer.gui.main_window.PlotConfigurationDialog", return_value=dialog
             ):
                 window.configure_plot(0)
-            assert set(window.plots.unit_views[0]) == {"km/h", "m/s²"}
-            window.channels.apply_plot_selection(1, ["EST_POS_95_M"])
-            window.track_combo.setCurrentText("EST")
+            assert set(window.plots.unit_views[0]) == {"km/h", "m/s²", "g"}
+            window.channels.apply_plot_selection(1, ["CALC_POS_95_M"])
+            window.track_combo.setCurrentText("CALC")
             assert window.track_action.isVisible()
             window.set_cursor(1500)
             window.plots.plots[0].setXRange(29, 33, padding=0)

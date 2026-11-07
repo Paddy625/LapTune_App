@@ -64,87 +64,102 @@ class NavigationResult:
 
 
 DESCRIPTIONS = {
-    "EST_LAT": ("deg", "Estimated vehicle latitude from IMU/GPS ESKF"),
-    "EST_LON": ("deg", "Estimated vehicle longitude from IMU/GPS ESKF"),
-    "EST_ALT_MSL_M": (
+    "CALC_LAT": ("deg", "Estimated vehicle latitude from IMU/GPS ESKF"),
+    "CALC_LON": ("deg", "Estimated vehicle longitude from IMU/GPS ESKF"),
+    "CALC_ALT_MSL_M": (
         "m",
         "Estimated height above mean sea level; available only with a measured MSL reference",
     ),
-    "EST_SPEED_KMH": ("km/h", "Estimated horizontal ground speed"),
-    "EST_VEL_X": ("m/s", "Estimated body velocity along forward X; forward travel is positive"),
-    "EST_VEL_Y": ("m/s", "Estimated body velocity towards the left"),
-    "EST_VEL_Z": ("m/s", "Estimated body velocity upwards"),
-    "EST_ACC_BIAS_X": ("m/s²", "Estimated ACC bias to subtract along forward vehicle X"),
-    "EST_ACC_BIAS_Y": ("m/s²", "Estimated ACC bias to subtract along leftward vehicle Y"),
-    "EST_ACC_BIAS_Z": ("m/s²", "Estimated ACC bias to subtract along upward vehicle Z"),
-    "EST_GYRO_BIAS_X": ("deg/s", "Estimated GYRO bias to subtract about forward vehicle X"),
-    "EST_GYRO_BIAS_Y": ("deg/s", "Estimated GYRO bias to subtract about leftward vehicle Y"),
-    "EST_GYRO_BIAS_Z": ("deg/s", "Estimated GYRO bias to subtract about upward vehicle Z"),
-    "EST_DISTANCE_M": (
+    "CALC_SPEED_KMH": ("km/h", "Estimated horizontal ground speed"),
+    "CALC_VEL_X": ("m/s", "Estimated body velocity along forward X; forward travel is positive"),
+    "CALC_VEL_Y": ("m/s", "Estimated body velocity towards the left"),
+    "CALC_VEL_Z": ("m/s", "Estimated body velocity upwards"),
+    "CALC_ACC_BIAS_X": ("m/s²", "Estimated ACC bias to subtract along forward vehicle X"),
+    "CALC_ACC_BIAS_Y": ("m/s²", "Estimated ACC bias to subtract along leftward vehicle Y"),
+    "CALC_ACC_BIAS_Z": ("m/s²", "Estimated ACC bias to subtract along upward vehicle Z"),
+    "CALC_GYRO_BIAS_X": ("deg/s", "Estimated GYRO bias to subtract about forward vehicle X"),
+    "CALC_GYRO_BIAS_Y": ("deg/s", "Estimated GYRO bias to subtract about leftward vehicle Y"),
+    "CALC_GYRO_BIAS_Z": ("deg/s", "Estimated GYRO bias to subtract about upward vehicle Z"),
+    "CALC_DISTANCE_M": (
         "m",
         (
             "Estimated horizontal distance integrated from fused speed; resets "
             "integration across invalid IMU gaps"
         ),
     ),
-    "EST_ACC_X": (
+    "CALC_ACC_X": (
         "m/s²",
         "Estimated linear acceleration X, positive forward; gravity and estimated bias removed",
     ),
-    "EST_ACC_Y": (
+    "CALC_ACC_Y": (
         "m/s²",
         "Estimated linear acceleration Y, positive left; gravity and estimated bias removed",
     ),
-    "EST_ACC_Z": (
+    "CALC_ACC_Z": (
         "m/s²",
         "Estimated linear acceleration Z, positive up; gravity and estimated bias removed",
     ),
-    "EST_GYRO_X": (
+    "CALC_G_LOAD_X": (
+        "g",
+        "Motion-induced inertial load X = -CALC_ACC_X / 9.80665; positive forward "
+        "when braking, negative when accelerating forward; gravity excluded",
+    ),
+    "CALC_G_LOAD_Y": (
+        "g",
+        "Motion-induced inertial load Y = -CALC_ACC_Y / 9.80665; positive left "
+        "in a right turn, negative in a left turn; gravity excluded",
+    ),
+    "CALC_G_LOAD_Z": (
+        "g",
+        "Motion-induced inertial load Z = -CALC_ACC_Z / 9.80665; positive up "
+        "during downward acceleration; gravity excluded, zero at rest (not static 1 g)",
+    ),
+    "CALC_GYRO_X": (
         "deg/s",
         "Estimated angular rate about forward X; mounting and bias compensated",
     ),
-    "EST_GYRO_Y": (
+    "CALC_GYRO_Y": (
         "deg/s",
         "Estimated angular rate about leftward Y; positive front down; "
         "mounting and bias compensated",
     ),
-    "EST_GYRO_Z": (
+    "CALC_GYRO_Z": (
         "deg/s",
         "Estimated angular rate about upward Z; positive left turn; mounting and bias compensated",
     ),
-    "EST_ROLL_DEG": ("deg", "Estimated right-hand roll about forward X"),
-    "EST_PITCH_DEG": (
+    "CALC_ROLL_DEG": ("deg", "Estimated right-hand roll about forward X"),
+    "CALC_PITCH_DEG": (
         "deg",
         "Estimated pitch angle, positive front up; opposite right-hand rotation about leftward Y",
     ),
-    "EST_HEADING_DEG": (
+    "CALC_HEADING_DEG": (
         "deg",
         "Estimated vehicle forward heading along +X, clockwise from true north",
     ),
-    "EST_POS_SIGMA_M": (
+    "CALC_POS_SIGMA_M": (
         "m",
         "Model horizontal RMS position uncertainty, sqrt(P_EE + P_NN); not measured accuracy",
     ),
-    "EST_POS_95_M": (
+    "CALC_POS_95_M": (
         "m",
         (
             "Conservative model 95% horizontal uncertainty radius; assumes calibrated "
             "Gaussian covariance"
         ),
     ),
-    "EST_GPS_AGE_S": ("s", "Integration time since the last accepted new horizontal GPS position"),
-    "EST_NAV_STATUS": (
+    "CALC_GPS_AGE_S": ("s", "Integration time since the last accepted new horizontal GPS position"),
+    "CALC_NAV_STATUS": (
         "code",
         (
             "0 waiting for initialization; 1 GPS aided; 2 dead reckoning; 3 low "
             "confidence; 4 IMU interruption, waiting for reinitialization"
         ),
     ),
-    "EST_TIME_S": (
+    "CALC_TIME_S": (
         "s",
         "Separate navigation integration clock; original display times are preserved",
     ),
-    "EST_TIME_QUALITY": (
+    "CALC_TIME_QUALITY": (
         "code",
         "0 hardware monotonic clock; 1 logger date/time interval; 2 estimated/repaired interval",
     ),
@@ -236,7 +251,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
     if collisions:
         raise ValueError(
             (
-                "EST output names already exist as other channels; original channels will "
+                "CALC output names already exist as other channels; original channels will "
                 "not be replaced: "
             )
             + ", ".join(collisions)
@@ -256,9 +271,9 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
     force, gyro = force @ mounting.T, gyro @ mounting.T
     imu_valid = np.isfinite(force).all(axis=1) & np.isfinite(gyro).all(axis=1)
     data = {name: np.full(n, np.nan) for name in DESCRIPTIONS}
-    data["EST_TIME_S"] = time.copy()
-    data["EST_TIME_QUALITY"] = clock.quality.astype(float)
-    data["EST_NAV_STATUS"][:] = 0
+    data["CALC_TIME_S"] = time.copy()
+    data["CALC_TIME_QUALITY"] = clock.quality.astype(float)
+    data["CALC_NAV_STATUS"][:] = 0
     starts = np.zeros(n, dtype=bool)
     positions = np.full((n, 3), np.nan)
     accepted, rejected, reinitializations = 0, 0, 0
@@ -290,14 +305,14 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
             history.clear()
             previous_speed = None
             gap_wait = True
-            data["EST_NAV_STATUS"][i] = 4
+            data["CALC_NAV_STATUS"][i] = 4
             continue
         new_position = observations.position_new[i]
         if new_position:
             history.append(i)
             history = [row for row in history if time[i] - time[row] <= max(3.0, 3 * nominal)]
         if estimator is None:
-            data["EST_NAV_STATUS"][i] = 4 if gap_wait else 0
+            data["CALC_NAV_STATUS"][i] = 4 if gap_wait else 0
             if not new_position or len(history) < 2:
                 continue
             first = history[0]
@@ -331,7 +346,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
             if i and not imu_valid[i - 1]:
                 estimator = None
                 previous_speed = None
-                data["EST_NAV_STATUS"][i] = 4
+                data["CALC_NAV_STATUS"][i] = 4
                 continue
             f = (force[i - 1] + force[i]) / 2 if i else force[i]
             w = (gyro[i - 1] + gyro[i]) / 2 if i else gyro[i]
@@ -356,7 +371,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
                         estimator = None
                         previous_speed = None
                         gap_wait = True
-                        data["EST_NAV_STATUS"][i] = 4
+                        data["CALC_NAV_STATUS"][i] = 4
                         continue
             else:
                 accepted_position = True
@@ -409,24 +424,25 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
         mode = 2 if age > outage_age or not observations.available[i] else 1
         if radius > config.unreliable_radius_m or clock.quality[i] == 2:
             mode = 3
-        data["EST_NAV_STATUS"][i] = mode
-        data["EST_SPEED_KMH"][i] = speed * 3.6
-        data["EST_DISTANCE_M"][i] = distance
-        data["EST_POS_SIGMA_M"][i] = np.sqrt(max(float(np.trace(estimator.covariance[:2, :2])), 0))
-        data["EST_POS_95_M"][i] = radius
-        data["EST_GPS_AGE_S"][i] = age
+        data["CALC_NAV_STATUS"][i] = mode
+        data["CALC_SPEED_KMH"][i] = speed * 3.6
+        data["CALC_DISTANCE_M"][i] = distance
+        data["CALC_POS_SIGMA_M"][i] = np.sqrt(max(float(np.trace(estimator.covariance[:2, :2])), 0))
+        data["CALC_POS_95_M"][i] = radius
+        data["CALC_GPS_AGE_S"][i] = age
         linear_body = force[i] - estimator.ba + estimator.rotation.T @ [0, 0, -GRAVITY]
         angular_body = np.degrees(gyro[i] - estimator.bg)
         body_velocity = estimator.rotation.T @ estimator.v
         for axis, value, angular in zip("XYZ", linear_body, angular_body, strict=True):
-            data["EST_ACC_" + axis][i] = value
-            data["EST_GYRO_" + axis][i] = angular
+            data["CALC_ACC_" + axis][i] = value
+            data["CALC_G_LOAD_" + axis][i] = -value / GRAVITY
+            data["CALC_GYRO_" + axis][i] = angular
         for index, axis in enumerate("XYZ"):
-            data["EST_VEL_" + axis][i] = body_velocity[index]
-            data["EST_ACC_BIAS_" + axis][i] = estimator.ba[index]
-            data["EST_GYRO_BIAS_" + axis][i] = np.degrees(estimator.bg[index])
+            data["CALC_VEL_" + axis][i] = body_velocity[index]
+            data["CALC_ACC_BIAS_" + axis][i] = estimator.ba[index]
+            data["CALC_GYRO_BIAS_" + axis][i] = np.degrees(estimator.bg[index])
         for name, value in zip(
-            ("EST_ROLL_DEG", "EST_PITCH_DEG", "EST_HEADING_DEG"),
+            ("CALC_ROLL_DEG", "CALC_PITCH_DEG", "CALC_HEADING_DEG"),
             attitude_angles(estimator.rotation),
             strict=True,
         ):
@@ -437,9 +453,9 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
             "No GPS-initialized navigation solution. Need forward movement spanning "
             "more than GPS position uncertainty"
         )
-    data["EST_LAT"], data["EST_LON"] = observations.geographic(positions)
+    data["CALC_LAT"], data["CALC_LON"] = observations.geographic(positions)
     if observations.height0 is not None:
-        data["EST_ALT_MSL_M"] = positions[:, 2] + observations.height0
+        data["CALC_ALT_MSL_M"] = positions[:, 2] + observations.height0
     warnings = clock.warnings + observations.warnings
     if calibration.acceleration_rms_m_s2 > 1 or calibration.gyro_rms_rad_s > 0.06:
         warnings.append(
@@ -453,7 +469,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
     if observations.height0 is None:
         warnings.append(
             "No measured altitude: calibration uses an explicitly assumed level road; "
-            "EST_ALT_MSL_M is unavailable"
+            "CALC_ALT_MSL_M is unavailable"
         )
     if (clock.quality == 2).any():
         warnings.append(
@@ -464,6 +480,14 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
         "algorithm": "15-error-state multiplicative SO(3) IMU/GNSS filter v2 (FLU)",
         "axes": VEHICLE_AXES + "; world East, North, Up",
         "vehicle_frame": VEHICLE_FRAME,
+        "output_prefix": "CALC_",
+        "g_load": {
+            "formula": "CALC_G_LOAD_axis = -CALC_ACC_axis / gravity_m_s2",
+            "gravity_m_s2": GRAVITY,
+            "unit": "g",
+            "includes_gravity": False,
+            "description": "Motion-induced inertial load, not total apparent load; zero at rest",
+        },
         "pitch_convention": "Positive front up, opposite right-hand rotation about leftward +Y",
         "config": asdict(config),
         "calibration": calibration.to_dict(),
@@ -489,7 +513,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
         channels[name] = Channel(
             name,
             unit,
-            "EST: " + description,
+            "CALC: " + description,
             "Calculated",
             samples,
             session.elapsed_time_s,

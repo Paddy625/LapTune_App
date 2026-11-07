@@ -82,7 +82,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                     for n in names
                 },
                 "alignment": (
-                    "Exact shared row times; calculated and EST channels are explicitly identified"
+                    "Exact shared row times; calculated and CALC channels are explicitly identified"
                 ),
                 "navigation": session.navigation.report if session.navigation is not None else None,
             },
@@ -144,20 +144,20 @@ def export_gpx(session: Session, path: Path) -> None:
 
 
 def export_estimated_gpx(session: Session, path: Path) -> None:
-    """Separate, explicitly identified EST track. The raw-GPS exporter is unchanged."""
+    """Separate, explicitly identified CALC track. The raw-GPS exporter is unchanged."""
     if session.navigation is None:
-        raise ValueError("Estimate vehicle motion first; this session has no EST trajectory")
+        raise ValueError("Estimate vehicle motion first; this session has no CALC trajectory")
     result = session.navigation
-    lat, lon = result.channels["EST_LAT"], result.channels["EST_LON"]
+    lat, lon = result.channels["CALC_LAT"], result.channels["CALC_LON"]
     rows = np.flatnonzero(lat.valid & lon.valid)
     if not len(rows):
-        raise ValueError("No GPS-initialized EST positions to export")
+        raise ValueError("No GPS-initialized CALC positions to export")
     ns, tv = "http://www.topografix.com/GPX/1/1", "https://telemetry-viewer.local/schema/1"
     ET.register_namespace("", ns)
     ET.register_namespace("tv", tv)
-    root = ET.Element(f"{{{ns}}}gpx", version="1.1", creator="LapTune EST")
+    root = ET.Element(f"{{{ns}}}gpx", version="1.1", creator="LapTune CALC")
     track = ET.SubElement(root, f"{{{ns}}}trk")
-    ET.SubElement(track, f"{{{ns}}}name").text = session.filename + " · EST estimated trajectory"
+    ET.SubElement(track, f"{{{ns}}}name").text = session.filename + " · CALC estimated trajectory"
     ET.SubElement(track, f"{{{ns}}}desc").text = (
         "Estimated IMU/GNSS trajectory, including dead reckoning. Not raw GPS measurements. "
         f"Uncertainty is model based. Vehicle axes {VEHICLE_AXES}."
@@ -169,13 +169,13 @@ def export_estimated_gpx(session: Session, path: Path) -> None:
         point = ET.SubElement(
             segment, f"{{{ns}}}trkpt", lat=str(lat.samples[row]), lon=str(lon.samples[row])
         )
-        altitude = result.channels["EST_ALT_MSL_M"]
+        altitude = result.channels["CALC_ALT_MSL_M"]
         if altitude.valid[row]:
             ET.SubElement(point, f"{{{ns}}}ele").text = str(altitude.samples[row])
         extension = ET.SubElement(point, f"{{{ns}}}extensions")
         ET.SubElement(extension, f"{{{tv}}}row_index").text = str(row)
         ET.SubElement(extension, f"{{{tv}}}timestamp_raw").text = session.timestamp_raw[row]
-        for name in ("EST_NAV_STATUS", "EST_POS_95_M", "EST_TIME_S", "EST_TIME_QUALITY"):
+        for name in ("CALC_NAV_STATUS", "CALC_POS_95_M", "CALC_TIME_S", "CALC_TIME_QUALITY"):
             ET.SubElement(extension, f"{{{tv}}}{name}").text = str(
                 result.channels[name].samples[row]
             )
@@ -184,6 +184,6 @@ def export_estimated_gpx(session: Session, path: Path) -> None:
             ET.SubElement(extension, f"{{{tv}}}source_file").text = source.path.name
         previous = row
     extensions = ET.SubElement(root, f"{{{ns}}}extensions")
-    ET.SubElement(extensions, f"{{{tv}}}EST_report").text = json.dumps(result.report)
+    ET.SubElement(extensions, f"{{{tv}}}CALC_report").text = json.dumps(result.report)
     # Keep naive/missing raw time explicit; no synthetic UTC times are manufactured.
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)

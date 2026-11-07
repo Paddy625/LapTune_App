@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **129 passed**, including optional private import/navigation integration tests.
+- `pytest -q`: **132 passed**, including optional private import/navigation integration tests.
   Public CI skips four private cases when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -128,12 +128,12 @@ Three empty-clock spans have explicit estimation diagnostics. Recorded clock bac
 trigger the existing monotonic point corrections and associated GPS jump checks; raw input
 times and measurements remain unchanged. Neither private log is committed.
 
-EST navigation tests validate forward/left/up signs, full tilted-gravity compensation, SO(3) edge
+CALC navigation tests validate forward/left/up signs, full tilted-gravity compensation, SO(3) edge
 angles, driving-only mounting/bias recovery, straight constant-speed driving with changing grade,
 unobservable-motion rejection, independent hardware/legacy clocks, preserved recording gaps,
 hardware reset reinitialization, true identical new GPS epochs versus held values, innovation
 rejection/reacquisition, increasing outage uncertainty, no navigation before GPS initialization,
-no bridging of missing IMU, immutable raw channels, protected EST-name collisions, interruption,
+no bridging of missing IMU, immutable raw channels, protected CALC-name collisions, interruption,
 and separate raw/estimated CSV/GPX semantics. The Qt test exercises the wizard, worker, map, plots,
 exports and close cancellation. Three synthetic ground-truth scenarios and explicit accuracy limits
 are documented in [navigation.md](navigation.md) and benchmarks/navigation.json. Private samples
@@ -145,3 +145,10 @@ cardinal headings without a 180° offset, uphill/downhill front-up pitch, and ca
 already aligned with forward/left/up. A covariance/state regression verifies that rotating the body
 reference axes preserves the global position and velocity solution. New outputs/export metadata
 identify `navigation_eskf_v2` and FLU; raw channel identities, arrays and names stay unchanged.
+
+The CALC naming/load update checks the three motion-induced inertial loads against an independent
+synthetic trajectory derivative, acceleration/braking and both turn signs, g units, gravity
+exclusion and validity during GPS loss/IMU interruption. The GUI plots g alongside m/s² and km/h
+on separate axes and exports CALC names, load descriptions and formula metadata to CSV/GPX.
+Original channels with legacy prefixes remain intact; collisions with new CALC output names
+are protected. The frozen-app smoke also checks all three load channels and the renamed map layer.

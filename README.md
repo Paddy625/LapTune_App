@@ -14,10 +14,12 @@ No backend service; raw logs stay on your computer.
 - Generic numeric channels, individual channel time arrays, validity and source metadata.
   No fixed IMU/GPS refresh frequency is assumed. An unknown numeric column appears automatically.
 - Moving-only mounting/bias calibration and 15-error-state IMU/GPS navigation: **Estimate motion
-  (EST)…** creates clearly described `EST_…` channels, with GPS-loss prediction, uncertainty,
+  (CALC)…** creates clearly described `CALC_…` channels, with GPS-loss prediction, uncertainty,
   map comparison and separate estimated GPX export. Raw measurements retain their names/values.
   Vehicle axes are **X forward, Y left, Z up (FLU)**; mounting calibration remains driving-only.
-  See [EST navigation, assumptions and use](docs/navigation.md).
+  `CALC_ACC_X/Y/Z` is vehicle acceleration [m/s²]; `CALC_G_LOAD_X/Y/Z` is the opposite
+  motion-induced inertial load [g], excluding gravity (zero at rest).
+  See [CALC navigation, assumptions and use](docs/navigation.md).
   Firmware developers: [logger acquisition and synchronization requirements](docs/embedded-logger-requirements.md).
 - Folder-first toolbar, a full-height LapTune wordmark and up to four linked PyQtGraph panels,
   per-plot channel configuration, solo mode,

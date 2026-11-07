@@ -128,7 +128,7 @@ def run_smoke(app, window, path: Path, result_path: Path | None = None):
 
 
 def run_navigation_smoke(app, window, path: Path, result_path: Path | None = None):
-    """Exercise the actual packaged ESKF/numpy code and EST Leaflet layer, not just imports."""
+    """Exercise the actual packaged ESKF/numpy code and CALC Leaflet layer, not just imports."""
     from telemetry_viewer.processing.navigation import NavigationConfig
 
     started = time.monotonic()
@@ -163,7 +163,7 @@ def run_navigation_smoke(app, window, path: Path, result_path: Path | None = Non
     def step():
         try:
             if time.monotonic() - started > 40:
-                raise TimeoutError("Waiting for EST computation or map")
+                raise TimeoutError("Waiting for CALC computation or map")
             if state["phase"] == "loading":
                 if (
                     window.session is None
@@ -184,16 +184,21 @@ def run_navigation_smoke(app, window, path: Path, result_path: Path | None = Non
                 for name, values in state["raw"].items():
                     np.testing.assert_array_equal(session.channels[name].samples, values)
                 result = session.navigation
-                assert all(name.startswith("EST_") for name in result.channels)
+                assert all(name.startswith("CALC_") for name in result.channels)
+                for axis in "XYZ":
+                    load = result.channels["CALC_G_LOAD_" + axis]
+                    acceleration = result.channels["CALC_ACC_" + axis]
+                    assert load.unit == "g"
+                    np.testing.assert_allclose(load.samples, -acceleration.samples / 9.80665)
                 first_gps = np.flatnonzero(session.channels["GPS_LAT"].valid)[0]
-                assert not result.channels["EST_LAT"].valid[:first_gps].any()
+                assert not result.channels["CALC_LAT"].valid[:first_gps].any()
                 outage = np.flatnonzero(
-                    result.channels["EST_LAT"].valid & ~session.channels["GPS_LAT"].valid
+                    result.channels["CALC_LAT"].valid & ~session.channels["GPS_LAT"].valid
                 )
                 assert len(outage), "Fixture must include an initialized GPS loss"
                 state["row"] = int(outage[len(outage) // 2])
                 window.set_cursor(state["row"])
-                window.map_widget.set_track_mode("EST")
+                window.map_widget.set_track_mode("CALC")
                 state["phase"] = "map"
                 window.map_widget.page.runJavaScript(
                     "JSON.stringify({layers:estimatedRoute.getLayers().length,row:estimatedRow})",

@@ -49,4 +49,4 @@ with TemporaryDirectory() as temp:
     )
     data = json.loads(navigation_result.read_text())
     assert data["passed"] and data["estimated_channels"] >= 20
-    print("Frozen Windows EST driving calibration, ESKF, GPS-loss and map smoke passed")
+    print("Frozen Windows CALC driving calibration, ESKF, GPS-loss and map smoke passed")

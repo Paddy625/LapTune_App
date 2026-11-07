@@ -1,6 +1,6 @@
 # Wymagania dla firmware loggera · LapTune
 
-Stan aplikacji: implementacja EST/ESKF v2, układ pojazdu FLU. Sprzęt: LSM6DS3 oraz u-blox NEO-6.
+Stan aplikacji: implementacja CALC/ESKF v2, układ pojazdu FLU. Sprzęt: LSM6DS3 oraz u-blox NEO-6.
 Dokument określa wymagania projektu; konkretne warianty układów, piny i możliwości ich firmware
 programista ma potwierdzić na urządzeniu. Kalibracja użytkowa odbywa się podczas jazdy.
 
@@ -234,7 +234,7 @@ DATA/CZAS pozostają informacją dodatkową. Jeśli odpowiadają UTC, opisać to
 przed ustaleniem czasu. Nie zastępować UTC licznikiem od startu. Holdover UTC po utracie GPS wymaga
 oznaczenia jakości czasu. Podstawą integracji pozostaje T_IMU_US.
 
-Nie dodawać własnych kolumn `EST_…` do surowego logu — są zarezerwowane dla wyników aplikacji.
+Nie dodawać własnych kolumn `CALC_…` do surowego logu — są zarezerwowane dla wyników aplikacji.
 
 ## 7. Kryteria odbioru
 
@@ -271,7 +271,7 @@ kontrolę zgodności, ale nie zastępują niezależnego wzorca. Nie gwarantować
 
 | Dane/funkcja | Stan w obecnym LapTune |
 |---|---|
-| T_IMU_US, GPS_STATE, GPS_FIX_ID/GPS_ITOW_MS, GPS_NEW/GPS_VALID | Wykorzystywane przez EST |
+| T_IMU_US, GPS_STATE, GPS_FIX_ID/GPS_ITOW_MS, GPS_NEW/GPS_VALID | Wykorzystywane przez CALC |
 | Spójne GPS przypisane do właściwego wiersza IMU | Wykorzystywane, przy założeniu wspólnego czasu pomiaru |
 | GPS_T_MEAS_US/GPS_T_RX_US i opóźnione obserwacje | Potrzebna obsługa czasu pomiaru i bufora stanów w aplikacji |
 | hAcc/vAcc/sAcc, kurs i składowe prędkości GNSS | Mogą być zapisane jako dodatkowe liczby; filtr nie korzysta z nich automatycznie |

@@ -143,29 +143,29 @@ def test_calibration_recovers_rotation_and_bias_without_standstill(navigation_da
     assert error < 3.0
     np.testing.assert_allclose(calibration["acceleration_bias_sensor"], truth["ba"], atol=0.15)
     np.testing.assert_allclose(calibration["gyro_bias_sensor"], truth["bg"], atol=0.004)
-    assert all(name.startswith("EST_") for name in result.channels)
+    assert all(name.startswith("CALC_") for name in result.channels)
     assert all(
-        channel.description and "EST" in channel.source for channel in result.channels.values()
+        channel.description and "CALC" in channel.source for channel in result.channels.values()
     )
-    assert not result.channels["EST_LAT"].valid[:100].any()
-    assert result.channels["EST_LAT"].valid[1450:1700].all()
-    assert np.nanmedian(result.channels["EST_VEL_X"].samples) > 0
+    assert not result.channels["CALC_LAT"].valid[:100].any()
+    assert result.channels["CALC_LAT"].valid[1450:1700].all()
+    assert np.nanmedian(result.channels["CALC_VEL_X"].samples) > 0
     assert result.report["vehicle_frame"] == "FLU"
     assert result.report["calibration"]["vehicle_frame"] == "FLU"
     assert all(c.calculation["kind"] == "navigation_eskf_v2" for c in result.channels.values())
     expected_bias = truth["mounting"] @ truth["bg"]
     for j, axis in enumerate("XYZ"):
-        assert np.nanmedian(result.channels["EST_GYRO_BIAS_" + axis].samples) == pytest.approx(
+        assert np.nanmedian(result.channels["CALC_GYRO_BIAS_" + axis].samples) == pytest.approx(
             np.degrees(expected_bias[j]), abs=0.3
         )
-    assert (result.channels["EST_NAV_STATUS"].samples[1450:1700] == 2).all()
+    assert (result.channels["CALC_NAV_STATUS"].samples[1450:1700] == 2).all()
     assert arrays == {
         name: (id(c), hashlib.sha256(c.samples.tobytes()).digest())
         for name, c in session.channels.items()
     }
     assert session.navigation is None  # Pure calculation; publication is atomic in the GUI.
-    clock = result.channels["EST_TIME_S"].samples
-    lat, lon = result.channels["EST_LAT"].samples, result.channels["EST_LON"].samples
+    clock = result.channels["CALC_TIME_S"].samples
+    lat, lon = result.channels["CALC_LAT"].samples, result.channels["CALC_LON"].samples
     estimated = np.column_stack((np.radians(lon) * 6378137, np.radians(lat) * 6335439.3272928))
     errors = np.linalg.norm(estimated - truth["position"][:, :2], axis=1)
     print(
@@ -178,12 +178,42 @@ def test_calibration_recovers_rotation_and_bias_without_standstill(navigation_da
     assert np.sqrt(np.nanmean(errors**2)) < 3
     aided = (
         np.array([text == "N" for text in session.logger_fields["GPS_STATE"]])
-        & result.channels["EST_LAT"].valid
+        & result.channels["CALC_LAT"].valid
     )
     raw_errors = np.linalg.norm(
         truth["measured_position"][:, :2] - truth["position"][:, :2], axis=1
     )
     assert np.sqrt(np.mean(errors[aided] ** 2)) < np.sqrt(np.mean(raw_errors[aided] ** 2))
+
+
+def test_motion_induced_loads_have_opposite_signs_g_units_and_no_gravity(navigation_data):
+    session, truth = navigation_data
+    result = estimate_navigation(
+        session, NavigationConfig(gps_position_sigma_m=1, gps_altitude_sigma_m=2)
+    )
+    # Independent world-trajectory derivative, rotated into forward/left/up.
+    body_acceleration = np.einsum("nji,nj->ni", truth["rotations"], truth["acceleration"])
+    for j, axis in enumerate("XYZ"):
+        load = result.channels["CALC_G_LOAD_" + axis]
+        acceleration = result.channels["CALC_ACC_" + axis]
+        assert load.unit == "g" and load.group == "Calculated"
+        assert "gravity excluded" in load.description.lower()
+        np.testing.assert_array_equal(load.valid, acceleration.valid)
+        np.testing.assert_allclose(load.samples, -acceleration.samples / 9.80665)
+        expected = -body_acceleration[:, j] / 9.80665
+        assert np.nanmean(np.abs(load.samples - expected)) < 0.015
+        assert not load.valid[:100].any()
+        assert load.valid[1450:1700].all()  # Same GPS-loss prediction as acceleration.
+    time = truth["time"]
+    assert np.nanmean(result.channels["CALC_G_LOAD_X"].samples[(time >= 4) & (time <= 7)]) < 0
+    assert np.nanmean(result.channels["CALC_G_LOAD_X"].samples[(time >= 13) & (time <= 17)]) > 0
+    assert np.nanmean(result.channels["CALC_G_LOAD_Y"].samples[(time >= 4) & (time <= 7)]) < 0
+    assert np.nanmean(result.channels["CALC_G_LOAD_Y"].samples[(time >= 22) & (time <= 25)]) > 0
+    assert np.nanmax(np.abs(result.channels["CALC_G_LOAD_Z"].samples)) < 0.03
+    assert result.report["output_prefix"] == "CALC_"
+    assert result.report["g_load"]["includes_gravity"] is False
+    assert result.report["g_load"]["gravity_m_s2"] == 9.80665
+    assert not any(name.startswith("EST_") for name in result.channels)
 
 
 def test_unobservable_constant_driving_rejected():
@@ -223,33 +253,47 @@ def test_no_imu_gap_is_bridged_and_est_gpx_has_separate_segments(navigation_data
     valid[2000:2005] = False
     session = replace(source, channels={**source.channels, "GYRO_X": replace(broken, valid=valid)})
     result = estimate_navigation(session)
-    assert not result.channels["EST_LAT"].valid[2000:2005].any()
-    assert result.channels["EST_LAT"].valid[2200]
+    assert not result.channels["CALC_LAT"].valid[2000:2005].any()
+    for axis in "XYZ":
+        assert not result.channels["CALC_G_LOAD_" + axis].valid[2000:2005].any()
+    assert result.channels["CALC_LAT"].valid[2200]
     assert result.report["initializations"] == 2
     session = replace(session, navigation=result, channels={**session.channels, **result.channels})
     path = tmp_path / "est.gpx"
     export_estimated_gpx(session, path)
     root = ET.parse(path).getroot()
     assert len(root.findall(".//{*}trkseg")) == 2
-    assert root.get("creator") == "LapTune EST"
+    assert root.get("creator") == "LapTune CALC"
     assert "X forward, Y left, Z up" in root.find(".//{*}desc").text
     assert not root.findall(".//{*}time")
-    assert len(root.findall(".//{*}trkpt")) == result.channels["EST_LAT"].valid.sum()
+    assert len(root.findall(".//{*}trkpt")) == result.channels["CALC_LAT"].valid.sum()
     raw_path = tmp_path / "raw.gpx"
     export_gpx(session, raw_path)
     assert len(ET.parse(raw_path).findall(".//{*}trkpt")) == len(source.gps_fix_samples)
     csv_path = tmp_path / "out.csv"
-    export_csv(session, csv_path, ["ACC_X", "EST_ACC_X"])
-    assert "EST_ACC_X [m/s²]" in csv_path.read_text(encoding="utf-8").splitlines()[0]
+    export_csv(session, csv_path, ["ACC_X", "CALC_ACC_X"])
+    assert "CALC_ACC_X [m/s²]" in csv_path.read_text(encoding="utf-8").splitlines()[0]
 
 
-def test_original_est_named_channel_is_protected(navigation_data):
+@pytest.mark.parametrize("name", ["CALC_LAT", "CALC_G_LOAD_Y"])
+def test_original_calc_named_channel_is_protected(navigation_data, name):
     source, _ = navigation_data
-    raw = replace(source.channels["ACC_X"], name="EST_LAT")
-    session = replace(source, channels={**source.channels, "EST_LAT": raw})
+    raw = replace(source.channels["ACC_X"], name=name)
+    session = replace(source, channels={**source.channels, name: raw})
     with pytest.raises(ValueError, match="original channels will not be replaced"):
         estimate_navigation(session)
+    assert session.channels[name] is raw
+
+
+def test_legacy_prefix_in_an_original_channel_is_not_renamed(navigation_data):
+    source, _ = navigation_data
+    raw = replace(source.channels["ACC_X"], name="EST_LAT")
+    values = raw.samples.copy()
+    session = replace(source, channels={**source.channels, "EST_LAT": raw})
+    result = estimate_navigation(session)
     assert session.channels["EST_LAT"] is raw
+    np.testing.assert_array_equal(raw.samples, values)
+    assert "EST_LAT" not in result.channels and "CALC_LAT" in result.channels
 
 
 def test_gps_innovation_rejects_a_spike_and_reacquires(navigation_data):
@@ -266,16 +310,16 @@ def test_gps_innovation_rejects_a_spike_and_reacquires(navigation_data):
         session, NavigationConfig(gps_position_sigma_m=1, gps_altitude_sigma_m=2)
     )
     assert result.report["rejected_position_updates"] >= 1
-    assert result.channels["EST_GPS_AGE_S"].samples[2100] > 0
-    assert result.channels["EST_GPS_AGE_S"].samples[2110] == 0
-    x = np.radians(result.channels["EST_LON"].samples[2110]) * 6378137
+    assert result.channels["CALC_GPS_AGE_S"].samples[2100] > 0
+    assert result.channels["CALC_GPS_AGE_S"].samples[2110] == 0
+    x = np.radians(result.channels["CALC_LON"].samples[2110]) * 6378137
     assert abs(x - truth["position"][2110, 0]) < 2
 
 
 def test_covariance_increases_during_gps_loss(navigation_data):
     source, _ = navigation_data
     result = estimate_navigation(source)
-    radius = result.channels["EST_POS_95_M"].samples
+    radius = result.channels["CALC_POS_95_M"].samples
     assert radius[1740] > radius[1420]
     assert radius[1900] < radius[1740]
 
@@ -289,7 +333,7 @@ def test_hardware_clock_reset_starts_a_new_navigation_segment(navigation_data):
         source, channels={**source.channels, "T_IMU_US": replace(channel, samples=values)}
     )
     result = estimate_navigation(session)
-    assert not result.channels["EST_LAT"].valid[2000]
+    assert not result.channels["CALC_LAT"].valid[2000]
     assert result.report["initializations"] == 2
 
 
@@ -312,10 +356,10 @@ def test_optional_private_navigation(filename):
         pytest.skip("Private navigation log intentionally excluded from Git")
     session = LegacyTxtImporter().load(path)
     result = estimate_navigation(session)
-    assert result.channels["EST_LAT"].valid.sum() > 1000
+    assert result.channels["CALC_LAT"].valid.sum() > 1000
     rotation = result.report["calibration"]["rotation_sensor_to_vehicle"]
     assert np.linalg.det(rotation) == pytest.approx(1)
-    assert not any(name.startswith("EST_") for name in session.channels)
+    assert not any(name.startswith("CALC_") for name in session.channels)
 
 
 def test_cancellation_does_not_publish_partial_channels(navigation_data):
@@ -446,9 +490,9 @@ def test_aligned_sensor_calibrates_without_an_unwanted_half_turn(tmp_path):
     mounting = np.array(result.report["calibration"]["rotation_sensor_to_vehicle"])
     assert np.degrees(np.linalg.norm(rotation_log(mounting))) < 3
     time = truth["time"]
-    assert np.nanmean(result.channels["EST_ACC_X"].samples[(time >= 4) & (time <= 7)]) > 0
-    assert np.nanmean(result.channels["EST_ACC_X"].samples[(time >= 13) & (time <= 17)]) < 0
-    assert np.nanmean(result.channels["EST_ACC_Y"].samples[(time >= 4) & (time <= 7)]) > 0
+    assert np.nanmean(result.channels["CALC_ACC_X"].samples[(time >= 4) & (time <= 7)]) > 0
+    assert np.nanmean(result.channels["CALC_ACC_X"].samples[(time >= 13) & (time <= 17)]) < 0
+    assert np.nanmean(result.channels["CALC_ACC_Y"].samples[(time >= 4) & (time <= 7)]) > 0
     for name, samples in originals.items():
         np.testing.assert_array_equal(session.channels[name].samples, samples)
 

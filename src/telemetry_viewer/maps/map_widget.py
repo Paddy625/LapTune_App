@@ -46,7 +46,7 @@ class MapWidget(QWidget):
         self._last_range = None
         self.estimated_range_locator = None
         self.estimated_marker_row = None
-        self.track_mode = "GPS + EST"
+        self.track_mode = "GPS + CALC"
         self.layer = ("Road", "", "")
         self.view = QWebEngineView(self)
         # Memory-only profile: private tracks and credentials are not put in a web disk cache.
@@ -120,7 +120,7 @@ class MapWidget(QWidget):
     def _send_visible_range(self):
         if not self.is_ready or self.range_locator is None or self.visible_range is None:
             return
-        locator = self.estimated_range_locator if self.track_mode == "EST" else self.range_locator
+        locator = self.estimated_range_locator if self.track_mode == "CALC" else self.range_locator
         marks = locator.locate(*self.visible_range) if locator is not None else None
         encoded = json.dumps(marks, allow_nan=False)
         if encoded != self._last_range:
@@ -142,10 +142,10 @@ class MapWidget(QWidget):
         if navigation is not None and sample != self.estimated_marker_row:
             channels = navigation.channels
             self.estimated_marker_row = sample
-            if channels["EST_LAT"].valid[sample] and channels["EST_LON"].valid[sample]:
+            if channels["CALC_LAT"].valid[sample] and channels["CALC_LON"].valid[sample]:
                 values = [
                     float(channels[name].samples[sample])
-                    for name in ("EST_LAT", "EST_LON", "EST_POS_95_M", "EST_NAV_STATUS")
+                    for name in ("CALC_LAT", "CALC_LON", "CALC_POS_95_M", "CALC_NAV_STATUS")
                 ]
                 self.page.runJavaScript(
                     "setEstimatedMarker(" + ",".join(json.dumps(v) for v in values) + f",{sample})"
@@ -157,7 +157,7 @@ class MapWidget(QWidget):
         if self.session is None or self.session.navigation is None:
             return
         navigation = self.session.navigation
-        lat, lon = (navigation.channels[name] for name in ("EST_LAT", "EST_LON"))
+        lat, lon = (navigation.channels[name] for name in ("CALC_LAT", "CALC_LON"))
         rows = np.flatnonzero(lat.valid & lon.valid)
         starts = navigation.segment_start[rows].copy()
         if len(starts):
@@ -178,7 +178,7 @@ class MapWidget(QWidget):
         parts, current = [], None
         previous = None
         for j, row in enumerate(rows):
-            status = int(navigation.channels["EST_NAV_STATUS"].samples[row])
+            status = int(navigation.channels["CALC_NAV_STATUS"].samples[row])
             point = [float(lat.samples[row]), float(lon.samples[row])]
             if starts[j] or current is None or current["status"] != status:
                 if current is not None and previous is not None and not starts[j]:
@@ -213,11 +213,11 @@ class MapWidget(QWidget):
         if navigation is None or self.track_mode == "GPS":
             return raw
         channels = navigation.channels
-        rows = np.flatnonzero(channels["EST_LAT"].valid & channels["EST_LON"].valid)
+        rows = np.flatnonzero(channels["CALC_LAT"].valid & channels["CALC_LON"].valid)
         if not len(rows):
-            return raw if self.track_mode != "EST" else None
+            return raw if self.track_mode != "CALC" else None
         distances = haversine_m(
-            lat, lon, channels["EST_LAT"].samples[rows], channels["EST_LON"].samples[rows]
+            lat, lon, channels["CALC_LAT"].samples[rows], channels["CALC_LON"].samples[rows]
         )
         candidates = rows[distances <= distances.min() + 5]
         selected = int(
@@ -230,7 +230,7 @@ class MapWidget(QWidget):
                 )
             ]
         )
-        if raw is None or self.track_mode == "EST":
+        if raw is None or self.track_mode == "CALC":
             return selected
         raw_distance = haversine_m(
             lat,

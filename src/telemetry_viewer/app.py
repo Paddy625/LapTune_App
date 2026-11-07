@@ -45,7 +45,7 @@ def main():
         "--smoke-navigation",
         type=Path,
         metavar="SYNTHETIC_LOG",
-        help="Offline EST calculation and map self-check; exits nonzero on failure",
+        help="Offline CALC calculation and map self-check; exits nonzero on failure",
     )
     parser.add_argument("--smoke-result", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
