@@ -19,8 +19,13 @@ No backend service; raw logs stay on your computer.
   Vehicle axes are **X forward, Y left, Z up (FLU)**; mounting calibration remains driving-only.
   `CALC_ACC_X/Y/Z` is vehicle acceleration [m/s²]; `CALC_G_LOAD_X/Y/Z` is the opposite
   motion-induced inertial load [g], excluding gravity (zero at rest).
+  `CALC_G_LOAD_LP_X/Y/Z` adds offline zero-phase Butterworth smoothing, with 2/5/10 Hz
+  presets in the calculation dialog (default 5 Hz). Unsmoothed signals remain available.
   See [CALC navigation, assumptions and use](docs/navigation.md).
   Firmware developers: [logger acquisition and synchronization requirements](docs/embedded-logger-requirements.md).
+- Firmware timing, PPS/GPS state and error counters have units and dedicated **Timing**,
+  **GPS status** and **Logger diagnostics** groups. GPS state is selectable as a step plot
+  (I=0, N=1, R=2) and shown as I/N/R in Channels, with raw text preserved in CSV.
 - Folder-first toolbar, a full-height LapTune wordmark and up to four linked PyQtGraph panels,
   per-plot channel configuration, solo mode,
   nearest recorded value readout, shared cursor and X-only wheel zoom/pan.

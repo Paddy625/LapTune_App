@@ -116,6 +116,23 @@ class NavigationDialog(QDialog):
             self.fields[name] = field
             form.addRow(label, field)
         layout.addWidget(parameters)
+        smoothing = QGroupBox("Load smoothing")
+        form = QFormLayout(smoothing)
+        self.load_cutoff = QComboBox()
+        for text, frequency in (
+            ("Smooth · 2 Hz", 2.0),
+            ("Standard · 5 Hz", 5.0),
+            ("Dynamic · 10 Hz", 10.0),
+        ):
+            self.load_cutoff.addItem(text, frequency)
+        self.load_cutoff.setCurrentIndex(1)
+        self.load_cutoff.setToolTip(
+            "Creates CALC_G_LOAD_LP_X/Y/Z from the calculated loads using zero-phase "
+            "Butterworth smoothing. Applies to these three output channels only. "
+            "Run boundaries are excluded to limit edge effects."
+        )
+        form.addRow("CALC_G_LOAD_LP", self.load_cutoff)
+        layout.addWidget(smoothing)
         note = QLabel(
             "Position starts only after valid GPS and a usable motion direction. During GPS loss, "
             "uncertainty grows. Constant speed on a constant straight slope alone cannot calibrate "
@@ -147,6 +164,7 @@ class NavigationDialog(QDialog):
             allow_estimated_time=self.allow_estimated.isChecked(),
             vehicle_constraint=self.constraints.isChecked(),
             assume_zero_mean_bank=self.zero_bank.isChecked(),
+            load_cutoff_hz=self.load_cutoff.currentData(),
             **{name: field.value() for name, field in self.fields.items()},
         )
 

@@ -3,7 +3,7 @@
 Development host: Linux, Python 3.12, NumPy 2.5.4, PySide6 6.12.0, PyQtGraph 0.14.0.
 Versions used by the source/test workflow are constrained in `constraints.txt`.
 
-- `pytest -q`: **132 passed**, including optional private import/navigation integration tests.
+- `pytest -q`: **146 passed**, including optional private import/navigation integration tests.
   Public CI skips four private cases when `data/local/LOG0023.TXT` and `data/local/LOG0013.TXT` are absent.
 - `ruff check .`: passed; formatting is checked separately with `ruff format --check .`.
 - GUI smoke: asynchronous import, original curve sample count, Time/Distance switching,
@@ -152,3 +152,11 @@ exclusion and validity during GPS loss/IMU interruption. The GUI plots g alongsi
 on separate axes and exports CALC names, load descriptions and formula metadata to CSV/GPX.
 Original channels with legacy prefixes remain intact; collisions with new CALC output names
 are protected. The frozen-app smoke also checks all three load channels and the renamed map layer.
+
+Butterworth load tests check DC preservation, the combined -3 dB cutoff for all three presets,
+zero phase, high-frequency suppression, nonuniform timestamps, isolated invalid/gap/restart
+boundaries, short/undersampled runs and cancellation. The current synthetic 36-column logger
+schema checks all numeric values, units, groups, categorical N/R/I codes and original text,
+future diagnostic fields, mixed-firmware folders, CSV legends and unchanged source bytes.
+The real GUI exercises smoothing selection, separate unit axes, step plots, readable GPS/PPS
+states and CSV/GPX exports. The frozen Windows smoke executes SciPy filtering in the actual EXE.

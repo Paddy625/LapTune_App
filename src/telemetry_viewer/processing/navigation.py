@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from telemetry_viewer.domain.models import Channel
+from telemetry_viewer.processing.load_filter import smooth_loads
 from telemetry_viewer.processing.navigation_calibration import GRAVITY, calibrate_driving
 from telemetry_viewer.processing.navigation_inputs import (
     channel_values,
@@ -41,6 +42,7 @@ class NavigationConfig:
     unreliable_radius_m: float = 50.0
     vehicle_constraint: bool = False
     assume_zero_mean_bank: bool = True
+    load_cutoff_hz: float = 5.0
 
     def validate(self):
         if self.acceleration_unit not in ("g", "m/s²") or self.gyro_unit not in ("deg/s", "rad/s"):
@@ -114,6 +116,14 @@ DESCRIPTIONS = {
         "Motion-induced inertial load Z = -CALC_ACC_Z / 9.80665; positive up "
         "during downward acceleration; gravity excluded, zero at rest (not static 1 g)",
     ),
+    **{
+        "CALC_G_LOAD_LP_" + axis: (
+            "g",
+            f"Smoothed motion-induced inertial load {axis}; Butterworth zero phase; "
+            "gravity excluded; unavailable near run boundaries",
+        )
+        for axis in "XYZ"
+    },
     "CALC_GYRO_X": (
         "deg/s",
         "Estimated angular rate about forward X; mounting and bias compensated",
@@ -456,7 +466,22 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
     data["CALC_LAT"], data["CALC_LON"] = observations.geographic(positions)
     if observations.height0 is not None:
         data["CALC_ALT_MSL_M"] = positions[:, 2] + observations.height0
+    smoothed, smoothing = smooth_loads(
+        time,
+        np.column_stack([data["CALC_G_LOAD_" + axis] for axis in "XYZ"]),
+        starts,
+        config.load_cutoff_hz,
+        config.maximum_imu_gap_s,
+        check=lambda: progress(99),
+    )
+    for j, axis in enumerate("XYZ"):
+        data["CALC_G_LOAD_LP_" + axis] = smoothed[:, j]
     warnings = clock.warnings + observations.warnings
+    if smoothing["short_runs_skipped"] or smoothing["undersampled_runs_skipped"]:
+        warnings.append(
+            "Smoothed load channels exclude short or undersampled runs; "
+            "see load_smoothing metadata and select a lower cutoff for a slower IMU"
+        )
     if calibration.acceleration_rms_m_s2 > 1 or calibration.gyro_rms_rad_s > 0.06:
         warnings.append(
             "Large driving-calibration residuals: mounting and biases are approximate. "
@@ -481,6 +506,7 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
         "axes": VEHICLE_AXES + "; world East, North, Up",
         "vehicle_frame": VEHICLE_FRAME,
         "output_prefix": "CALC_",
+        "load_smoothing": smoothing,
         "g_load": {
             "formula": "CALC_G_LOAD_axis = -CALC_ACC_axis / gravity_m_s2",
             "gravity_m_s2": GRAVITY,
@@ -509,6 +535,11 @@ def estimate_navigation(session, config=None, progress=lambda percent: None):
     }
     channels = {}
     for name, (unit, description) in DESCRIPTIONS.items():
+        if name.startswith("CALC_G_LOAD_LP_"):
+            description += (
+                f"; from CALC_G_LOAD_{name[-1]}; final -3 dB cutoff "
+                f"{config.load_cutoff_hz:g} Hz; edge guard {smoothing['edge_guard_s']:g} s"
+            )
         samples = data[name]
         channels[name] = Channel(
             name,

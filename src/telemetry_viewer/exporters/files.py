@@ -78,6 +78,7 @@ def export_csv(session: Session, path: Path, names: list[str]) -> None:
                         "interpolation": session.channels[n].interpolation,
                         "calculation": session.channels[n].calculation,
                         "description": session.channels[n].description,
+                        "value_labels": session.channels[n].value_labels,
                     }
                     for n in names
                 },

@@ -44,6 +44,7 @@ class Channel:
     interpolation: Literal["none", "linear", "hold"] = "none"
     calculation: dict | None = None
     description: str = ""
+    value_labels: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass

@@ -190,6 +190,10 @@ def run_navigation_smoke(app, window, path: Path, result_path: Path | None = Non
                     acceleration = result.channels["CALC_ACC_" + axis]
                     assert load.unit == "g"
                     np.testing.assert_allclose(load.samples, -acceleration.samples / 9.80665)
+                    filtered = result.channels["CALC_G_LOAD_LP_" + axis]
+                    assert filtered.unit == "g" and filtered.valid.any()
+                assert session.channels["GPS_T_MEAS_US"].group == "Timing"
+                assert session.channels["IMU_VALID"].group == "Logger diagnostics"
                 first_gps = np.flatnonzero(session.channels["GPS_LAT"].valid)[0]
                 assert not result.channels["CALC_LAT"].valid[:first_gps].any()
                 outage = np.flatnonzero(

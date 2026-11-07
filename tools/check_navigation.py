@@ -101,6 +101,8 @@ def verify_map(encoded):
         assert len(rows) == len(session.nr)
         assert "CALC_ACC_X [m/s²]" in rows[0] and rows[0]["CALC_ACC_X [m/s²]"] == ""
         assert "CALC_G_LOAD_X [g]" in rows[0] and rows[0]["CALC_G_LOAD_X [g]"] == ""
+        assert "CALC_G_LOAD_LP_X [g]" in rows[0]
+        assert rows[1500]["CALC_G_LOAD_LP_X [g]"] != ""
         assert (
             float(rows[1500]["CALC_G_LOAD_X [g]"])
             == -float(rows[1500]["CALC_ACC_X [m/s²]"]) / 9.80665
@@ -112,6 +114,7 @@ def verify_map(encoded):
         assert metadata["navigation"]["vehicle_frame"] == "FLU"
         assert metadata["navigation"]["output_prefix"] == "CALC_"
         assert metadata["navigation"]["g_load"]["includes_gravity"] is False
+        assert metadata["navigation"]["load_smoothing"]["cutoff_hz"] == 2
         assert not any(name.startswith("EST_") for name in metadata["channels"])
         assert metadata["channels"]["CALC_G_LOAD_X"]["unit"] == "g"
         assert "positive forward" in metadata["channels"]["CALC_ACC_X"]["description"]
@@ -149,6 +152,8 @@ def check():
             assert dialog.acceleration_unit.currentText() == "g"
             assert dialog.gyro_unit.currentText() == "deg/s"
             assert dialog.zero_bank.isChecked()
+            assert dialog.load_cutoff.currentData() == 5
+            dialog.load_cutoff.setCurrentIndex(0)
             dialog.allow_estimated.setChecked(False)
             dialog.resize(620, 580)
 
@@ -178,14 +183,37 @@ def check():
                 assert id(session.channels[name]) == identity
                 assert hashlib.sha256(session.channels[name].samples.tobytes()).digest() == digest
             assert all(name.startswith("CALC_") for name in session.navigation.channels)
+            assert session.navigation.report["load_smoothing"]["cutoff_hz"] == 2
+            for name, group in (
+                ("GPS_T_MEAS_US", "Timing"),
+                ("GPS_T_RX_US", "Timing"),
+                ("TIME_SYNC_STATE", "Timing"),
+                ("IMU_VALID", "Logger diagnostics"),
+                ("SD_QUEUE_DROPPED", "Logger diagnostics"),
+                ("GPS_STATE", "GPS status"),
+            ):
+                assert window.channels.items[name][0].parent().text(0) == group
+            window.channels.set_cursor(100)
+            assert window.channels.items["GPS_STATE"][0].text(1) == "N"
+            assert window.channels.items["TIME_SYNC_STATE"][0].text(1) == "PPS locked"
+            window.channels.set_cursor(101)
+            assert window.channels.items["GPS_STATE"][0].text(1) == "R"
             for axis in "XYZ":
                 load = session.channels["CALC_G_LOAD_" + axis]
                 acceleration = session.channels["CALC_ACC_" + axis]
                 np.testing.assert_allclose(load.samples, -acceleration.samples / 9.80665)
                 assert "gravity excluded" in window.channels.items[load.name][0].toolTip(0).lower()
+                filtered = session.channels["CALC_G_LOAD_LP_" + axis]
+                assert filtered.unit == "g" and filtered.valid[1450:1700].all()
             item = window.channels.items["CALC_ACC_X"][0]
             assert item.parent().text(0) == "Calculated" and "positive forward" in item.toolTip(0)
-            selected = ["GPS_SPEED_KMH", "CALC_SPEED_KMH", "CALC_ACC_X", "CALC_G_LOAD_X"]
+            selected = [
+                "GPS_SPEED_KMH",
+                "CALC_SPEED_KMH",
+                "CALC_ACC_X",
+                "CALC_G_LOAD_X",
+                "CALC_G_LOAD_LP_X",
+            ]
             dialog = PlotConfigurationDialog(session, 0, [], "GPS / CALC comparison", {}, window)
             for name, item in dialog.channel_items.items():
                 item.setCheckState(
@@ -197,7 +225,7 @@ def check():
             ):
                 window.configure_plot(0)
             assert set(window.plots.unit_views[0]) == {"km/h", "m/s²", "g"}
-            window.channels.apply_plot_selection(1, ["CALC_POS_95_M"])
+            window.channels.apply_plot_selection(1, ["GPS_STATE", "TIME_SYNC_STATE"])
             window.track_combo.setCurrentText("CALC")
             assert window.track_action.isVisible()
             window.set_cursor(1500)

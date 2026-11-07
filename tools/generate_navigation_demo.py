@@ -91,6 +91,29 @@ def write_demo(path, data=None):
     header = ["NR", "DATA", "CZAS", "T_IMU_US", "GPS_STATE", "GPS_FIX_ID"]
     header += [prefix + axis for prefix in ("ACC_", "GYRO_") for axis in "XYZ"]
     header += ["GPS_LAT", "GPS_LON", "GPS_SPEED_KMH", "GPS_ALT_MSL_M"]
+    diagnostics = [
+        "GPS_ITOW_MS",
+        "IMU_VALID",
+        "IMU_FLAGS",
+        "T_ACC_US",
+        "T_GYRO_US",
+        "IMU_DROPPED",
+        "IMU_SPI_ERRORS",
+        "IMU_PAIR_ERRORS",
+        "GPS_UART_ERRORS",
+        "GPS_CHECKSUM_ERRORS",
+        "GPS_INCOMPLETE_EPOCHS",
+        "GPS_LATE_EPOCHS",
+        "SD_QUEUE_DROPPED",
+        "SD_MAX_PAUSE_US",
+        "IMU_MISSED_DRDY",
+        "GPS_RX_OVERFLOWS",
+        "GPS_INVALID_FIXES",
+        "GPS_T_RX_US",
+        "GPS_T_MEAS_US",
+        "TIME_SYNC_STATE",
+    ]
+    header += diagnostics
     origin = datetime(2026, 1, 1, 12)
     last = None
     epoch = 0
@@ -114,6 +137,19 @@ def write_demo(path, data=None):
                 state = "N"
             else:
                 state = "R"
+            imu_us = int(round(t * 1e6)) + 1000000
+            gps_us = i // 10 * 200000 + 1000000
+            extra = dict.fromkeys(diagnostics, 0)
+            extra.update(
+                GPS_ITOW_MS=gps_us // 1000 if not outage else "",
+                IMU_VALID=1,
+                T_ACC_US=imu_us,
+                T_GYRO_US=imu_us - 8,
+                SD_MAX_PAUSE_US=100000,
+                GPS_T_RX_US=gps_us + 105000 if not outage else "",
+                GPS_T_MEAS_US=gps_us if not outage else "",
+                TIME_SYNC_STATE=2 if outage else 1,
+            )
             writer.writerow(
                 [
                     70000 + i,
@@ -125,6 +161,7 @@ def write_demo(path, data=None):
                     *(data["force"][i] / 9.80665),
                     *np.degrees(data["gyro"][i]),
                     *(last if last is not None else [""] * 4),
+                    *(extra[k] for k in diagnostics),
                 ]
             )
     return path

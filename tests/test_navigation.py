@@ -195,6 +195,11 @@ def test_motion_induced_loads_have_opposite_signs_g_units_and_no_gravity(navigat
     body_acceleration = np.einsum("nji,nj->ni", truth["rotations"], truth["acceleration"])
     for j, axis in enumerate("XYZ"):
         load = result.channels["CALC_G_LOAD_" + axis]
+        filtered = result.channels["CALC_G_LOAD_LP_" + axis]
+        assert filtered.unit == "g" and filtered.group == "Calculated"
+        assert filtered.valid[1450:1700].all()
+        assert not filtered.valid[:100].any()
+        assert "5 Hz" in filtered.description
         acceleration = result.channels["CALC_ACC_" + axis]
         assert load.unit == "g" and load.group == "Calculated"
         assert "gravity excluded" in load.description.lower()
@@ -211,6 +216,7 @@ def test_motion_induced_loads_have_opposite_signs_g_units_and_no_gravity(navigat
     assert np.nanmean(result.channels["CALC_G_LOAD_Y"].samples[(time >= 22) & (time <= 25)]) > 0
     assert np.nanmax(np.abs(result.channels["CALC_G_LOAD_Z"].samples)) < 0.03
     assert result.report["output_prefix"] == "CALC_"
+    assert result.report["load_smoothing"]["cutoff_hz"] == 5
     assert result.report["g_load"]["includes_gravity"] is False
     assert result.report["g_load"]["gravity_m_s2"] == 9.80665
     assert not any(name.startswith("EST_") for name in result.channels)
@@ -256,6 +262,7 @@ def test_no_imu_gap_is_bridged_and_est_gpx_has_separate_segments(navigation_data
     assert not result.channels["CALC_LAT"].valid[2000:2005].any()
     for axis in "XYZ":
         assert not result.channels["CALC_G_LOAD_" + axis].valid[2000:2005].any()
+        assert not result.channels["CALC_G_LOAD_LP_" + axis].valid[1980:2025].any()
     assert result.channels["CALC_LAT"].valid[2200]
     assert result.report["initializations"] == 2
     session = replace(session, navigation=result, channels={**session.channels, **result.channels})

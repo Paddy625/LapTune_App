@@ -1,5 +1,6 @@
 # Versions validated in this development environment. Apply with pip -c constraints.txt.
 numpy==2.5.4
+scipy==1.18.1
 PySide6==6.12.0
 pyqtgraph==0.14.0
 pytest==9.2.0

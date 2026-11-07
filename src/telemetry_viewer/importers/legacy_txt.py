@@ -7,6 +7,7 @@ import numpy as np
 
 from telemetry_viewer.domain.models import Channel, QualityIssue, Session, SourceFile
 from telemetry_viewer.importers.base import ImportErrorDetail
+from telemetry_viewer.importers.logger_fields import LOGGER_FIELDS, VALUE_LABELS, extra_field
 from telemetry_viewer.processing.gps import gps_distances, integrate_speed
 from telemetry_viewer.processing.timebase import build_timebase
 
@@ -40,6 +41,7 @@ NEW_OPTIONAL = {
     "GPS_NEW",
     "GPS_VALID",
 }
+NEW_OPTIONAL.update(LOGGER_FIELDS)
 
 
 def filename_order(path: Path) -> tuple:
@@ -228,9 +230,14 @@ class LegacyTxtImporter:
         time, time_issues = build_timebase(raw, row_indices)
         frequency = (len(time) - 1) / time[-1] if len(time) > 1 else None
         channels = {}
+        if "GPS_STATE" in text_fields:
+            codes = {label: code for code, label in VALUE_LABELS["GPS_STATE"].items()}
+            values["GPS_STATE"] = [codes.get(s.upper(), np.nan) for s in text_fields["GPS_STATE"]]
         for name, data in values.items():
             samples = np.asarray(data, dtype=np.float64)
-            unit, group = KNOWN.get(name, ("", "CAN / Other"))
+            unit, group, description = extra_field(name)
+            if name in KNOWN and name not in LOGGER_FIELDS:
+                unit, group = KNOWN[name]
             valid = np.isfinite(samples)
             if name in ("GPS_LAT", "GPS_LON"):
                 valid &= abs(samples) <= (90 if name == "GPS_LAT" else 180)
@@ -243,6 +250,13 @@ class LegacyTxtImporter:
                 time,
                 valid,
                 None if group == "GPS" else frequency,
+                interpolation=(
+                    "hold"
+                    if group in ("GPS status", "Logger diagnostics") or name == "TIME_SYNC_STATE"
+                    else "none"
+                ),
+                description=description,
+                value_labels=VALUE_LABELS.get(name, {}).copy(),
             )
         nan = np.full(len(time), np.nan)
         speed = channels["GPS_SPEED_KMH"].samples if "GPS_SPEED_KMH" in channels else nan

@@ -108,7 +108,11 @@ class ChannelPanel(QTreeWidget):
                 item.setText(1, "—")
                 item.setToolTip(1, "No recorded samples")
                 continue
-            item.setText(1, f"{channel.samples[i]:.3f}" if channel.valid[i] else "invalid")
+            value = channel.samples[i]
+            item.setText(
+                1,
+                channel.value_labels.get(value, f"{value:.3f}") if channel.valid[i] else "invalid",
+            )
             item.setToolTip(1, f"Nearest sample at {channel.time_s[i]:.6f} s")
 
     def _menu(self, pos):

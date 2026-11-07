@@ -135,6 +135,7 @@ fixes cannot be distinguished from held values. The report explicitly records th
 | `CALC_DISTANCE_M` | Integral of fused horizontal speed [m], excluding invalid IMU gaps |
 | `CALC_ACC_X/Y/Z` | Vehicle-frame linear acceleration, bias/gravity removed [m/s²] |
 | `CALC_G_LOAD_X/Y/Z` | Motion-induced inertial load, `-CALC_ACC_X/Y/Z / 9.80665` [g]; gravity excluded |
+| `CALC_G_LOAD_LP_X/Y/Z` | Zero-phase Butterworth-smoothed motion-induced loads [g], default 5 Hz |
 | `CALC_GYRO_X/Y/Z` | Vehicle-frame angular rates, bias compensated [deg/s] |
 | `CALC_ACC_BIAS_X/Y/Z` | Estimated vehicle-frame ACC bias being subtracted [m/s²] |
 | `CALC_GYRO_BIAS_X/Y/Z` | Estimated vehicle-frame gyro bias being subtracted [deg/s] |
@@ -156,6 +157,18 @@ apparent loads including gravity, bank or grade. For example, an upward-facing s
 accelerometer can read approximately +1 g while `CALC_G_LOAD_Z` is zero. They share acceleration's
 validity and remain unavailable before GPS initialization or through invalid IMU gaps.
 The formula, reference gravity and `includes_gravity: false` are recorded in export metadata.
+
+The calculation dialog offers **Smooth · 2 Hz**, **Standard · 5 Hz** (default), and
+**Dynamic · 10 Hz** for the three `CALC_G_LOAD_LP_…` channels. This smooths the final loads;
+the existing calibration, ESKF inputs, position, unsmoothed loads and source arrays are preserved.
+The filter uses SciPy Butterworth SOS, fourth order in each forward/backward pass, with the
+prototype cutoff corrected so the combined -3 dB point equals the selected frequency. DC loads
+are retained. Continuous runs are temporarily interpolated onto uniform grids using the navigation
+IMU clock, filtered and mapped back to the original plotting rows. No state crosses invalid IMU,
+recording gaps or navigation reinitialization; continuous TXT boundaries and GPS outages do not
+split a valid run. Three cutoff periods at each end are marked unavailable to limit edge effects
+(0.6 s per end at 5 Hz). Short or undersampled runs remain unavailable and are reported explicitly.
+Descriptions and `load_smoothing` metadata include source channels, cutoff, timing and edge policy.
 
 Position/motion values remain invalid until navigation initialization and across interruptions.
 Diagnostic status/time channels can explain those intervals. Neither raw distance axis is replaced
